@@ -3,18 +3,35 @@ The sources from where the code was borrowed (if applicable) can be found in SOU
 The description of each directory and the files in them can be found in FILE_STRUCT.
 
 How to build:
-        $ mkdir build
-        $ cd build
-        $ make -j
+        1. Run make with the target as help to see what all build options are availabe
+                $ make help
+        2. Run make with appropriate build options
+                $ make <target of your choice> [-j[NUM_BUILD_JOBS]]
+
+How to build tests:
+        1. Go to the tests directory
+                $ cd tests
+        2. Set up environment variables
+                $ export ARGOBOTS_INSTALL_DIR=/path/to/argobots/installation
+                $ export ARGOLIB_INSTALL_DIR=/path/to/this/directory
+                $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
+                $ export LD_LIBRARY_PATH=$ARGOLIB_INSTALL_DIR/<release | debug>/lib:$LD_LIBRARY_PATH
+        2. Run make with the target as help to see what all build options are availabe
+                $ make help
+        3. Run make with appropriate build options
+                $ make <target of your choice> [-j[NUM_BUILD_JOBS]]
 
 How to use the generated files:
-1. Set up the environment variable which points to the argobots installation directory:
+1. Set up the environment variables which points to the argobots and argolib installation directories:
         $ export ARGOBOTS_INSTALL_DIR=/absolute/path/to/argobots/installation/directory
-2. To compile C++ aplications with argolib, use:
-        ## TODO ##
-3. Set up LD_LIBRARY_PATH to include the runtime argolib and argobots libraries:
-        $ export LD_LIBRARY_PATH=/absolute/path/to/argobots/installation/directory/lib:$LD_LIBRARY_PATH
-        $ export LD_LIBRARY_PATH=/absolute/path/to/argolib/installation/directory/lib:$LD_LIBRARY_PATH
-4. Lauch you application after setting up the number of argolib workers:
-        $ ARGOLIB_WORKERS=4 ./my_app
+        $ export ARGOLIB_INSTALL_DIR=/absolute/path/to/argolib/installation/directory
 
+2. To compile C++ aplications with argolib, use:
+        $ g++ -O3 -I$(ARGOLIB_INSTALL_DIR)/include -L$(ARGOLIB_INSTALL_DIR)/release/lib -I$(ARGOBOTS_INSTALL_DIR)/include -L$(ARGOBOTS_INSTALL_DIR)/lib -largolib -labt <sources> -o <binary_name>
+
+3. Set up LD_LIBRARY_PATH to include argolib and argobots runtime libraries:
+        $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
+        $ export LD_LIBRARY_PATh=$ARGOLIB_INSTALL_DIR/release/lib:$LD_LIBRARY_PATH
+
+4. Lauch you application after setting up the number of argolib workers:
+        $ ARGOLIB_WORKERS=<NUM_WORKERS> <binary_name>
