@@ -21,7 +21,7 @@ How to build tests:
         3. Run make with appropriate build options
                 $ make <target of your choice> [-j[NUM_BUILD_JOBS]]
 
-How to run test:
+How to run tests:
         1. Go to the appropriate bin directory depending on what build you chose
                 $ cd tests/bin/<release | debug>
         2. Execute the binary that you want to run
