@@ -1,0 +1,21 @@
+The names and contact details of the authors of this project can be found in AUTHORS.
+The sources from where the code was borrowed (if applicable) can be found in SOURCES.
+The description of each directory and the files in them can be found in FILE_STRUCT.
+
+How to build:
+        $ mkdir build
+        $ cd build
+        $ cmake ..
+        $ make -j
+
+How to use the generated files:
+1. Set up the environment variable which points to the argobots installation directory:
+        $ export ARGOBOTS_INSTALL_DIR=/absolute/path/to/argobots/installation/directory
+2. To compile C++ aplications with argolib, use:
+        ## TODO ##
+3. Set up LD_LIBRARY_PATH to include the runtime argolib and argobots libraries:
+        $ export LD_LIBRARY_PATH=/absolute/path/to/argobots/installation/directory/lib:$LD_LIBRARY_PATH
+        $ export LD_LIBRARY_PATH=/absolute/path/to/argolib/installation/directory/lib:$LD_LIBRARY_PATH
+4. Lauch you application after setting up the number of argolib workers:
+        $ ARGOLIB_WORKERS=4 ./my_app
+
