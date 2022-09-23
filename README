@@ -9,16 +9,16 @@ How to build:
                 $ make <target of your choice> [-j[NUM_BUILD_JOBS]]
 
 How to build tests:
-        1. Go to the tests directory
-                $ cd tests
-        2. Set up environment variables
+        1. Set up environment variables
                 $ export ARGOBOTS_INSTALL_DIR=/path/to/argobots/installation
                 $ export ARGOLIB_INSTALL_DIR=/path/to/this/directory
                 $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
                 $ export LD_LIBRARY_PATH=$ARGOLIB_INSTALL_DIR/<release | debug>/lib:$LD_LIBRARY_PATH
-        2. Run make with the target as help to see what all build options are availabe
+        2. Go to the tests directory
+                $ cd tests
+        3. Run make with the target as help to see what all build options are availabe
                 $ make help
-        3. Run make with appropriate build options
+        4. Run make with appropriate build options
                 $ make <target of your choice> [-j[NUM_BUILD_JOBS]]
 
 How to run tests:
