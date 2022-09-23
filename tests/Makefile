@@ -33,14 +33,14 @@ release: $(TARGETS)								# Set the default target as release for make
 debug: $(DEBUG_TARGETS)								# Set the debug target for make
 
 $(TARGETS): $(OBJECTS)								# Specify how to compile TARGETS
-	$(CC) -L$(RELARGOLIB) -L$(LIBPATH) $(LDFLAGS) $^ -o $@
+	$(CC) -L$(RELARGOLIB) -L$(LIBPATH) $^ -o $@ $(LDFLAGS)
 $(OBJECTS): $(SRC)								# Specify how to compile OBJECTS
-	$(CC) -L$(RELARGOLIB) -L$(LIBPATH) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(LDFLAGS) $(OPTFLAGS) -c $^ -o $@
+	$(CC) -L$(RELARGOLIB) -L$(LIBPATH) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(OPTFLAGS) -c $^ -o $@ $(LDFLAGS)
 
 $(DEBUG_TARGETS) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGET
-	$(CC) -L$(DBGARGOLIB) -L$(LIBPATH) $(LDFLAGS) $(DBGFLAGS) $^ -o $@
+	$(CC) -L$(DBGARGOLIB) -L$(LIBPATH) $(DBGFLAGS) $^ -o $@ $(LDFLAGS)
 $(DEBUG_OBJECTS): $(SRC)							# Specify how to compile DEBUG_OBJECTS
-	$(CC) -L$(DBGARGOLIB) -L$(LIBPATH) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(DBGFLAGS) $(LDFLAGS) $(DBGFLAGS) -c $^ -o $@
+	$(CC) -L$(DBGARGOLIB) -L$(LIBPATH) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(DBGFLAGS) $(DBGFLAGS) -c $^ -o $@ $(LDFLAGS)
 
 .PHONY: help									# Specify the help target which prints the usage
 help:

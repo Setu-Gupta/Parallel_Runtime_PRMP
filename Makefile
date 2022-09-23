@@ -28,12 +28,12 @@ release: $(TARGET)								# Set the default target as release for make
 debug: $(DEBUG_TARGET)								# Set the debug target for make
 
 $(TARGET): $(OBJECTS)								# Specify how to compile TARGET
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OPTFLAGS) $(OBJECTS) -o $(TARGET)
+	$(CC) $(CFLAGS) $(OPTFLAGS) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 $(OBJECTS): $(SRC)								# Specify how to compile OBJECTS
 	$(CC) $(CFLAGS) $(OPTFLAGS) -c $^ -o $@
 
 $(DEBUG_TARGET) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGET
-	$(CC) $(CFLAGS) $(LDFLAGS) $(DBGFLAGS) $(DEBUG_OBJECTS) -o $(DEBUG_TARGET)
+	$(CC) $(CFLAGS) $(DBGFLAGS) $(DEBUG_OBJECTS) -o $(DEBUG_TARGET) $(LDFLAGS)
 $(DEBUG_OBJECTS): $(SRC)							# Specify how to compile DEBUG_OBJECTS
 	$(CC) $(CFLAGS) $(DBGFLAGS) -c $^ -o $@
 
