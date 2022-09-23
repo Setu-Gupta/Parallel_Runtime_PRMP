@@ -39,7 +39,7 @@ $(TARGETS): $(OBJECTS)								# Specify how to compile TARGETS
 $(OBJECTS): $(SRC)								# Specify how to compile OBJECTS
 	$(CC) -L$(RELARGOLIB) -L$(LIBPATH) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(OPTFLAGS) -c $^ -o $@ $(LDFLAGS)
 
-$(DEBUG_TARGETS) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGET
+$(DEBUG_TARGETS) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGETS
 	$(CC) -L$(DBGARGOLIB) -L$(LIBPATH) $(DBGFLAGS) $^ -o $@ $(LDFLAGS)
 $(DEBUG_OBJECTS): $(SRC)							# Specify how to compile DEBUG_OBJECTS
 	$(CC) -L$(DBGARGOLIB) -L$(LIBPATH) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(DBGFLAGS) $(DBGFLAGS) -c $^ -o $@ $(LDFLAGS)
