@@ -29,7 +29,9 @@ DEBUG_OBJECTS = $(patsubst %.c,build/debug/%.o,$(SRC))
 # List the debug target binaries to be generated
 DEBUG_TARGETS = $(patsubst %.c,bin/debug/%,$(SRC))
 
+.PHONY: release
 release: $(TARGETS)								# Set the default target as release for make
+.PHONY: debug
 debug: $(DEBUG_TARGETS)								# Set the debug target for make
 
 $(TARGETS): $(OBJECTS)								# Specify how to compile TARGETS

@@ -24,7 +24,9 @@ DEBUG_OBJECTS = $(patsubst src/%.c,debug/build/%.o,$(SRC))
 # List the target for the debug build
 DEBUG_TARGET = debug/lib/$(LIB)
 
+.PHONY: release
 release: $(TARGET)								# Set the default target as release for make
+.PHONY: debug
 debug: $(DEBUG_TARGET)								# Set the debug target for make
 
 $(TARGET): $(OBJECTS)								# Specify how to compile TARGET
