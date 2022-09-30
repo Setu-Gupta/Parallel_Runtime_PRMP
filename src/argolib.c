@@ -1,5 +1,6 @@
 #include <stdio.h>
-#include "../include/argolib.h"
+#include <stdlib.h>
+#include <argolib.h>
 
 int num_xstreams;
 int num_threads;
