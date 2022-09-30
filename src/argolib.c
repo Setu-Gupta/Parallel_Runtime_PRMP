@@ -14,11 +14,11 @@ void argolib_init(int argc, char **argv)
 	if (num_threads <= 0)
 		num_threads = 1;
 
-	*xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * num_xstreams);
-	*pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
-	*scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
+	xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * num_xstreams);
+	pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
+	scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
 
-	*threads = (ABT_thread *)malloc(sizeof(ABT_thread) * num_threads);
+	threads = (ABT_thread *)malloc(sizeof(ABT_thread) * num_threads);
 
 	ABT_init(argc, argv);
 
@@ -70,8 +70,8 @@ Task_handle *argolib_fork(fork_t fptr, void *args)
 	 * The pool associated with this thread is same as the pool of the caller.
 	 * thread_pointer will be returned to the caller hence defined static.
 	 * Preferably, the caller should pass a thread_arg_t pointer
-	*/
-	static Task_handle* thread_pointer;
+	 */
+	Task_handle *thread_pointer = (Task_handle *)malloc(sizeof(Task_handle));
 
 	int rank;
 	ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
@@ -79,16 +79,18 @@ Task_handle *argolib_fork(fork_t fptr, void *args)
 	// When should we use ABT_thread_create_to ?
 	ABT_thread_create(target_pool, fptr, args,
 					  ABT_THREAD_ATTR_NULL, thread_pointer);
-	
+
 	return thread_pointer;
 }
 
-void argolib_kernel(fork_t fptr, void *args){
+void argolib_kernel(fork_t fptr, void *args)
+{
 	/**TODO
 	 * Print Statistics
-	*/
-	Task_handle** kernel_task;
-	*kernel_task = argolib_fork(fptr, args);
+	 */
+	Task_handle *kernel_task[1];
+	kernel_task[0] = argolib_fork(fptr, args);
+
 	argolib_join(kernel_task, 1);
 }
 
@@ -105,6 +107,12 @@ void argolib_join(Task_handle **list, int size)
 	for (int i = 0; i < size; i++)
 	{
 		ABT_thread_free(list[i]);
+	}
+
+	// Free all the thread pointers allocated in fork
+	for (int i = 0; i < size; i++)
+	{
+		free(list[i]);
 	}
 }
 

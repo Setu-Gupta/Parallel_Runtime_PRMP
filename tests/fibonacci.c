@@ -12,6 +12,7 @@ void fib(fibonacci_arg_t* fib_arg)
 {
     if (fib_arg->n < 2){
         fib_arg->ret = fib_arg->n;
+        return;
     }
 
     fibonacci_arg_t *x, *y;
@@ -34,11 +35,12 @@ int main(int argc, char **argv) {
     int result;
     fibonacci_arg_t* arg;
     arg = (fibonacci_arg_t*) malloc(sizeof(fibonacci_arg_t));
-    arg->n = 40;
+    arg->n = 27;
     arg->ret = 0;
     argolib_kernel((fork_t)fib, (void*)arg);
     result = arg->ret;
-    printf("Fib(40) = %d\n", result);
+    printf("Fib(27) = %d\n", result);
     argolib_finalize();
+    free(arg);
     return 0;
 }
