@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <argolib.h>
+#include "argolib.h"
 
 int num_xstreams;
 int num_threads;
@@ -26,33 +26,40 @@ void argolib_init(int argc, char **argv)
 	ABT_xstream_self(&xstreams[0]);
 
 	/* Create pools. */
-	for (int i = 0; i < num_xstreams; i++)
-	{
-		if (is_randws)
+
+	if (is_randws)
+		create_pools(num_xstreams, pools);
+	else
+		for (int i = 0; i < num_xstreams; i++)
 		{
-			ABT_pool_create_basic(ABT_POOL_RANDWS, ABT_POOL_ACCESS_MPMC,
-								  ABT_TRUE, &pools[i]);
+			if (is_randws)
+			{
+				// ABT_pool_create_basic(ABT_POOL_RANDWS, ABT_POOL_ACCESS_MPMC,
+				// 					  ABT_TRUE, &pools[i]);
+			}
+			else
+			{
+				ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE,
+									  &pools[i]);
+			}
 		}
-		else
-		{
-			ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE,
-								  &pools[i]);
-		}
-	}
 
 	/* Create schedulers. */
-	for (int i = 0; i < num_xstreams; i++)
-	{
-		ABT_pool *tmp = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
-		for (int j = 0; j < num_xstreams; j++)
+	if (is_randws)
+		create_scheds(num_xstreams, pools, scheds);
+	else
+		for (int i = 0; i < num_xstreams; i++)
 		{
-			tmp[j] = pools[(i + j) % num_xstreams];
+			ABT_pool *tmp = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
+			for (int j = 0; j < num_xstreams; j++)
+			{
+				tmp[j] = pools[(i + j) % num_xstreams];
+			}
+			//?Difference between ABT_POOL_RANDWS and ABT_SCHED_RANDWS?
+			ABT_sched_create_basic(ABT_SCHED_DEFAULT, num_xstreams, tmp,
+								   ABT_SCHED_CONFIG_NULL, &scheds[i]);
+			free(tmp);
 		}
-		//?Difference between ABT_POOL_RANDWS and ABT_SCHED_RANDWS?
-		ABT_sched_create_basic(ABT_SCHED_DEFAULT, num_xstreams, tmp,
-							   ABT_SCHED_CONFIG_NULL, &scheds[i]);
-		free(tmp);
-	}
 
 	// Set the scheduler for the primary execution stream
 	ABT_xstream_set_main_sched(xstreams[0], scheds[0]);
