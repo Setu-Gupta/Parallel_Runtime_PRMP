@@ -83,17 +83,6 @@ Task_handle *argolib_fork(fork_t fptr, void *args)
 	return thread_pointer;
 }
 
-void argolib_kernel(fork_t fptr, void *args)
-{
-	/**TODO
-	 * Print Statistics
-	 */
-	Task_handle *kernel_task[1];
-	kernel_task[0] = argolib_fork(fptr, args);
-
-	argolib_join(kernel_task, 1);
-}
-
 void argolib_join(Task_handle **list, int size)
 {
 	// First join all the threads
@@ -116,6 +105,18 @@ void argolib_join(Task_handle **list, int size)
 	}
 }
 
+void argolib_kernel(fork_t fptr, void *args)
+{
+	/**TODO
+	 * Print Statistics
+	 */
+	Task_handle *kernel_task[1];
+	kernel_task[0] = argolib_fork(fptr, args);
+
+	argolib_join(kernel_task, 1);
+}
+
+
 void argolib_finalize()
 {
 	// Finalize argobots
@@ -126,9 +127,4 @@ void argolib_finalize()
 	free(pools);
 	free(scheds);
 	free(threads);
-}
-
-void test(void)
-{
-	printf("Hello, I am a shared library\n");
 }

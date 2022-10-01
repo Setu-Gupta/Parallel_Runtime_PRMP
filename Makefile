@@ -5,7 +5,7 @@ CFLAGS = -march=native -pedantic -Wall -Werror -Wextra -fPIC
 # Set up the include path
 INCPATH = $(ARGOBOTS_INSTALL_DIR)/include ./include
 # Set up argobots library path
-LIBPATH = $(ARGOBOTS_INSTALL_DIR)/lib
+ARGOLIBPATH = $(ARGOBOTS_INSTALL_DIR)/lib
 # Set the flags to be passed to the linker
 LDFLAGS	= -labt -shared
 # Set the optimization level for the release build
@@ -34,12 +34,12 @@ release: $(TARGET)								# Set the default target as release for make
 debug: $(DEBUG_TARGET)								# Set the debug target for make
 
 $(TARGET): $(OBJECTS)								# Specify how to compile TARGET
-	$(CC) $(CFLAGS) $(OPTFLAGS) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
+	$(CC) -L$(ARGOLIBPATH) $(CFLAGS) $(OPTFLAGS) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 $(OBJECTS): $(SRC)								# Specify how to compile OBJECTS
 	$(CC) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(OPTFLAGS) -c $^ -o $@
 
 $(DEBUG_TARGET) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGET
-	$(CC) -L$(LIBPATH) $(CFLAGS) $(DBGFLAGS) $(DEBUG_OBJECTS) -o $(DEBUG_TARGET) $(LDFLAGS)
+	$(CC) -L$(ARGOLIBPATH) $(CFLAGS) $(DBGFLAGS) $(DEBUG_OBJECTS) -o $(DEBUG_TARGET) $(LDFLAGS)
 $(DEBUG_OBJECTS): $(SRC)							# Specify how to compile DEBUG_OBJECTS
 	$(CC) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(DBGFLAGS) -c $^ -o $@
 

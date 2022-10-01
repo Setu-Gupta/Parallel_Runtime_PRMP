@@ -1,10 +1,11 @@
-#ifndef _ARGOLIB_H
+#ifndef _ARGOLIB_H_
 #define _ARGOLIB_H_
 
-#include <abt.h>
+// This is just for testing purposes.
+#define DEFAULT_NUM_XSTREAMS 2
+#define DEFAULT_NUM_THREADS 8
 
-typedef ABT_thread Task_handle;
-typedef void (*fork_t)(void *args);
+#include <abt.h>
 
 // For giving an ID to each thread
 typedef struct
@@ -20,9 +21,8 @@ ABT_sched *scheds;
 ABT_thread *threads;
 thread_arg_t *thread_args;
 
-// This is just for testing purposes.
-#define DEFAULT_NUM_XSTREAMS 2
-#define DEFAULT_NUM_THREADS 8
+typedef ABT_thread Task_handle;
+typedef void (*fork_t)(void *args);
 
 /**
  * Initializes the ArgoLib runtime, and it should be the first thing to call in the user main.
@@ -61,6 +61,5 @@ Task_handle *argolib_fork(fork_t fptr, void *args);
  */
 void argolib_join(Task_handle **list, int size);
 
-extern void test(void);
 
 #endif
