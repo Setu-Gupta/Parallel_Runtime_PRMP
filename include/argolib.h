@@ -1,5 +1,5 @@
-#ifndef _ARGOLIB_H_
-#define _ARGOLIB_H_
+#ifndef __ARGOLIB_H__
+#define __ARGOLIB_H__
 
 // This is just for testing purposes.
 #define DEFAULT_NUM_XSTREAMS 2
