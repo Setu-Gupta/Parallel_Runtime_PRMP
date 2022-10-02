@@ -8,14 +8,40 @@ How to build:
         2. Run make with appropriate build options
                 $ make <target of your choice> [-j[NUM_BUILD_JOBS]]
 
+How to use the generated libraries:
+        1. Set up the environment variables which points to the argobots and argolib installation directories:
+                $ export ARGOBOTS_INSTALL_DIR=/absolute/path/to/argobots/installation/directory
+                $ export ARGOLIB_INSTALL_DIR=/absolute/path/to/argolib/installation/directory
+        2. To compile C++ aplications with argolib, use:
+                $ g++ -O3 -I$(ARGOLIB_INSTALL_DIR)/include -L$(ARGOLIB_INSTALL_DIR)/release/lib -I$(ARGOBOTS_INSTALL_DIR)/include -L$(ARGOBOTS_INSTALL_DIR)/lib -largolib -labt <sources> -o <binary_name>
+        3. Set up LD_LIBRARY_PATH to include argolib and argobots runtime libraries:
+                $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
+                $ export LD_LIBRARY_PATh=$ARGOLIB_INSTALL_DIR/release/lib:$LD_LIBRARY_PATH
+        4. Lauch you application after setting up the number of argolib workers:
+                $ ARGOLIB_WORKERS=<NUM_WORKERS> <binary_name>
+
+How to create custom tests:
+        1. Go to the tests directory
+                $ cd tests
+        2. Create a new directory for your test
+                $ mkdir <test_dir>
+        3. Go to your test directory
+                $ cd <test_dir>
+        4. Copy the starting Makefile from tests/build_setup to tests/<test_dir>
+                $ cp ../build_setup/Makefile .
+        5. Modify the Makefile as per your requirements
+        6. Copy the build and the bin directory structure to <test_dir>
+                $ cp ../build_setup/bin .
+                $ cp ../build_setup/build .
+
 How to build tests:
         1. Set up environment variables
                 $ export ARGOBOTS_INSTALL_DIR=/path/to/argobots/installation
                 $ export ARGOLIB_INSTALL_DIR=/path/to/this/directory
                 $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
                 $ export LD_LIBRARY_PATH=$ARGOLIB_INSTALL_DIR/<release | debug>/lib:$LD_LIBRARY_PATH
-        2. Go to the tests directory
-                $ cd tests
+        2. Go to your test directory
+                $ cd tests/<test_dir>
         3. Run make with the target as help to see what all build options are availabe
                 $ make help
         4. Run make with appropriate build options
@@ -23,22 +49,8 @@ How to build tests:
 
 How to run tests:
         1. Go to the appropriate bin directory depending on what build you chose
-                $ cd tests/bin/<release | debug>
-        2. Execute the binary that you want to run
-                $ ./<binary_of_your_choice>
-
-
-How to use the generated files:
-1. Set up the environment variables which points to the argobots and argolib installation directories:
-        $ export ARGOBOTS_INSTALL_DIR=/absolute/path/to/argobots/installation/directory
-        $ export ARGOLIB_INSTALL_DIR=/absolute/path/to/argolib/installation/directory
-
-2. To compile C++ aplications with argolib, use:
-        $ g++ -O3 -I$(ARGOLIB_INSTALL_DIR)/include -L$(ARGOLIB_INSTALL_DIR)/release/lib -I$(ARGOBOTS_INSTALL_DIR)/include -L$(ARGOBOTS_INSTALL_DIR)/lib -largolib -labt <sources> -o <binary_name>
-
-3. Set up LD_LIBRARY_PATH to include argolib and argobots runtime libraries:
-        $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
-        $ export LD_LIBRARY_PATh=$ARGOLIB_INSTALL_DIR/release/lib:$LD_LIBRARY_PATH
-
-4. Lauch you application after setting up the number of argolib workers:
-        $ ARGOLIB_WORKERS=<NUM_WORKERS> <binary_name>
+                $ cd tests/<test_dir>/bin/<release | debug>
+        2. Export ASAN_OPTIONS=use_odr_indicator=1 if you want to run the debug binary to ignore one definition rule violations
+                $ export ASAN_OPTIONS=use_odr_indicator=1
+        3. Execute the binary
+                $ ./<binary_name>
