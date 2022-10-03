@@ -2,7 +2,7 @@
 #define __ARGOLIB_H__
 
 // This is just for testing purposes.
-#define DEFAULT_NUM_XSTREAMS 2
+#define DEFAULT_NUM_XSTREAMS 8
 #define DEFAULT_NUM_THREADS 8
 
 #include <abt.h>
@@ -23,6 +23,9 @@ thread_arg_t *thread_args;
 
 typedef ABT_thread Task_handle;
 typedef void (*fork_t)(void *args);
+
+static void create_pools(int num, ABT_pool *pools);
+static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds);
 
 /**
  * Initializes the ArgoLib runtime, and it should be the first thing to call in the user main.
