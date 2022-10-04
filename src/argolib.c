@@ -295,7 +295,7 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
                         p_pool->p_head = p_unit;
                 }
                 p_pool->p_tail = p_unit;
-                pool_head_pop[rank]++;
+                pool_tail_push[rank]++;
         }
         pthread_mutex_unlock(&p_pool->lock);
 }
