@@ -26,6 +26,9 @@ struct pool_t {
 int num_xstreams;
 int num_threads;
 
+pthread_mutex_t pplock;
+int *pool_net_push;
+int *pool_net_pop;
 int *pool_head_push;
 int *pool_head_pop;
 int *pool_tail_push;
@@ -37,7 +40,10 @@ void argolib_init(int argc, char **argv)
 {
         num_xstreams = DEFAULT_NUM_XSTREAMS;
         num_threads = DEFAULT_NUM_THREADS;
-
+        
+        pthread_mutex_init(&pplock, 0);
+        pool_net_push = (int*)calloc(num_xstreams, sizeof(int));
+        pool_net_pop = (int*)calloc(num_xstreams, sizeof(int));
         pool_head_push = (int*)calloc(num_xstreams, sizeof(int));
         pool_head_pop = (int*)calloc(num_xstreams, sizeof(int));
         pool_tail_push = (int*)calloc(num_xstreams, sizeof(int));
@@ -187,6 +193,7 @@ void argolib_finalize()
                 printf("\tPush Head: %d\tPush Tail: %d\n", pool_head_push[i], pool_tail_push[i]);
                 printf("\tPop Head: %d\tPop Tail: %d\n", pool_head_pop[i], pool_tail_pop[i]);
                 printf("\tStolen From: %d\n", pool_stolen_from[i]);
+                printf("\tPush: %d\tPop: %d\n", pool_net_push[i], pool_net_pop[i]);
         }
 
         free(pool_head_push);
@@ -244,7 +251,6 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                 pool_head_pop[rank]++;
                 }
         } else if (context & ABT_POOL_CONTEXT_OWNER_SECONDARY) {
-                pthread_mutex_lock(&p_pool->lock);
                 {/* Pop from the tail. */
                 p_unit = p_pool->p_tail;
                 p_pool->p_tail = p_unit->p_next;
@@ -260,6 +266,9 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         pthread_mutex_unlock(&p_pool->lock);
         if (!p_unit)
                 return ABT_THREAD_NULL;
+        pthread_mutex_lock(&pplock);
+        pool_net_pop[rank]++;
+        pthread_mutex_unlock(&pplock);
         return p_unit->thread;
 }
 
@@ -273,6 +282,9 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         ABT_xstream_self_rank(&rank);
 
         pthread_mutex_lock(&p_pool->lock);
+        pthread_mutex_lock(&pplock);
+        pool_net_push[rank]++;
+        pthread_mutex_unlock(&pplock);
         if (context & (ABT_POOL_CONTEXT_OP_THREAD_CREATE |
                                 ABT_POOL_CONTEXT_OP_THREAD_CREATE_TO |
                                 ABT_POOL_CONTEXT_OP_THREAD_REVIVE |

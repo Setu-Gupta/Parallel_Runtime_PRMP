@@ -2,7 +2,7 @@
 #define __ARGOLIB_H__
 
 // This is just for testing purposes.
-#define DEFAULT_NUM_XSTREAMS 8
+#define DEFAULT_NUM_XSTREAMS 16
 #define DEFAULT_NUM_THREADS 8
 
 #include <abt.h>
