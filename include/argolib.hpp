@@ -7,18 +7,10 @@
 #define __ARGOLIB_HPP__
 
 #include <initializer_list>
-#include <argolib.h>
+#include <argolib_core.h>
 #include <functional>
 
-typedef ABT_thread Task_handle;
-
-typedef void (*test_t)(void);
-void run_lambda(test_t func)
-{
-        func();
-}
-
-using FunctionCallback = std::function<void(void)>;
+using FunctionCallback = std::function<void(void*)>;
 namespace CLambdaWorkaround
 {
 
@@ -39,12 +31,17 @@ namespace CLambdaWorkaround
                 get_callback()();
         }   
 
-        void lambda_wrapper(FunctionCallback func)
+        void lambda_kernel_wrapper(FunctionCallback func)
         {   
                 set_callback(func);
-                run_lambda(&lambda_adapter);
+                argolib_core_kernel(&lambda_adapter, NULL);
         }   
 
+        Task_handle* lambda_fork_wrapper(FunctionCallback func)
+        {   
+                set_callback(func);
+                return argolib_core_fork(&lambda_adapter, NULL);
+        }   
 }
 
 namespace argolib
@@ -54,29 +51,27 @@ namespace argolib
          // Arguments “argc” and “argv” are the ones passed in the call to user main method.
         void init(int argc, char **argv)
         {
-                argolib_init(argc, argv);
+                argolib_core_init(argc, argv);
         }
 
         // Finalizes the ArgoLib runtime, and performs the cleanup
         void finalize()
         {
-                argolib_finalize();
+                argolib_core_finalize();
         }
 
         // Runs the top level recursive parallel prgram passed as the lambda
         template <typename T>
         void kernel(T &&lambda)
         {
-                std::cout << "Called kernel" << std::endl;
-                CLambdaWorkaround::lambda_wrapper(lambda);			
+                CLambdaWorkaround::lambda_kernel_wrapper(lambda);			
         }
 
         // Creates a new ULT to run lambda and returns the task handle to the ULT
         template <typename T>
         Task_handle* fork(T &&lambda)
         {
-                std::cout << "Called fork" << std::endl;
-                CLambdaWorkaround::lambda_wrapper(lambda);			
+                return CLambdaWorkaround::lambda_fork_wrapper(lambda);			
         }
 
         // Called by join to join multiple tasks
@@ -84,8 +79,6 @@ namespace argolib
         // Finally calls argolib_join on the list of handles
         void join_impl(std::initializer_list<Task_handle*> handles)
         {
-                std::cout << "Called join_impl" << std::endl;
-                
                 int size = handles.size();      // Get the number of handles passed
                 Task_handle* list[size];        // Create an array of handles to be passed to argolib
                 
@@ -94,7 +87,7 @@ namespace argolib
                 for(Task_handle* th : handles)
                         list[i++] = th;
                 
-                // argolib_join(list, size);       // Pass the list and the size to argolib
+                argolib_core_join(list, size);       // Pass the list and the size to argolib
         }
         
         // Called to join multiple tasks via their task handles
@@ -102,7 +95,6 @@ namespace argolib
         template<typename... T>
         void join(T ...handles)
         {
-                std::cout << "Called join..." << std::endl;
                 join_impl({handles...});    // Pass on all the arguments to the join_impl as a initializer list
         }
 }

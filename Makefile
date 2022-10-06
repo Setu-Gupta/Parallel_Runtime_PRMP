@@ -3,7 +3,7 @@ CC = gcc
 # Set the flags to be passed to the compiler regardless of the optimization level
 CFLAGS = -march=native -pedantic -Wall -Werror -Wextra -fPIC -Wno-unused-parameter
 # Set up the include path
-INCPATH = $(ARGOBOTS_INSTALL_DIR)/include ./include
+INCPATH = $(ARGOBOTS_INSTALL_DIR)/include ./src/include
 # Set up argobots library path
 ARGOLIBPATH = $(ARGOBOTS_INSTALL_DIR)/lib
 # Set the flags to be passed to the linker

@@ -1,8 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include "argolib.h"
+#include <argolib_core.h>
 
-#include <pthread.h>
+// Global variables
+ABT_xstream *xstreams;
+ABT_pool *pools;
+ABT_sched *scheds;
+ABT_thread *threads;
+thread_arg_t *thread_args;
+
+static void create_pools(int num, ABT_pool *pools);
+static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds);
 
 /** Creating Pool for Work Stealing Runtime 
  * 
@@ -39,7 +45,7 @@ int *pool_tail_pop;
 int *pool_stolen_from;
 int *pool_stole_from;
 
-void argolib_init(int argc, char **argv)
+void argolib_core_init(int argc, char **argv)
 {
         num_xstreams = DEFAULT_NUM_XSTREAMS;
         num_threads = DEFAULT_NUM_THREADS;
@@ -122,7 +128,7 @@ void argolib_init(int argc, char **argv)
         }
 }
 
-Task_handle *argolib_fork(fork_t fptr, void *args)
+Task_handle *argolib_core_fork(fork_t fptr, void *args)
 {
         /** Create ULTs.
          * The pool associated with this thread is same as the pool of the caller.
@@ -143,7 +149,7 @@ Task_handle *argolib_fork(fork_t fptr, void *args)
         return thread_pointer;
 }
 
-void argolib_join(Task_handle **list, int size)
+void argolib_core_join(Task_handle **list, int size)
 {
         // First join all the threads
         // ABT_thread_join might not be needed. Confirm!
@@ -165,22 +171,18 @@ void argolib_join(Task_handle **list, int size)
         }
 }
 
-void argolib_kernel(fork_t fptr, void *args)
+void argolib_core_kernel(fork_t fptr, void *args)
 {
         /**TODO
          * Print Statistics
          */
         Task_handle *kernel_task[1];
-        kernel_task[0] = argolib_fork(fptr, args);
-
-        //printf("Kernel Forked\n");
-
-        argolib_join(kernel_task, 1);
-        //printf("Kernel Joined\n");
+        kernel_task[0] = argolib_core_fork(fptr, args);
+        argolib_core_join(kernel_task, 1);
 }
 
 
-void argolib_finalize()
+void argolib_core_finalize()
 {
         // Finalize argobots
         ABT_finalize();

@@ -7,9 +7,9 @@
 #define __ARGOLIB_HPP__
 
 #include <initializer_list>
-#include <argolib.h>
 #include <functional>
 #include <iostream>
+#include "./../src/include/argolib_core.h"
 
 typedef ABT_thread Task_handle;
 

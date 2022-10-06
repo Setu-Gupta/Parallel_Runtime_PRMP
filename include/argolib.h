@@ -1,42 +1,24 @@
 #ifndef __ARGOLIB_H__
 #define __ARGOLIB_H__
 
-// This is just for testing purposes.
-#define DEFAULT_NUM_XSTREAMS 16
-#define DEFAULT_NUM_THREADS 8
-
-#include <abt.h>
-
-// For giving an ID to each thread
-typedef struct
-{
-    void* args; //Pointer to the real arguments to the function
-    int tid;    //ID to each thread
-} thread_arg_t;
-
-// Global variables
-ABT_xstream *xstreams;
-ABT_pool *pools;
-ABT_sched *scheds;
-ABT_thread *threads;
-thread_arg_t *thread_args;
-
-typedef ABT_thread Task_handle;
-typedef void (*fork_t)(void *args);
-
-static void create_pools(int num, ABT_pool *pools);
-static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds);
+#include "./../src/include/argolib_core.h"
 
 /**
  * Initializes the ArgoLib runtime, and it should be the first thing to call in the user main.
  * Arguments “argc” and “argv” are the ones passed in the call to user main method.
  */
-void argolib_init(int argc, char **argv);
+void argolib_init(int argc, char **argv)
+{
+        argolib_core_init(argc, argv);
+}
 
 /**
  * Finalize the ArgoLib runtime, and performs the cleanup.
  */
-void argolib_finalize();
+void argolib_finalize()
+{
+        argolib_core_finalize();
+}
 
 /**
  * User can use this API to launch the top-level computation kernel. This API
@@ -44,7 +26,10 @@ void argolib_finalize();
  * of the computation kernel. Some of the statistics are: execution time, total
  * tasks created, etc. This top-level kernel would actually be launching the recursive tasks.
  */
-void argolib_kernel(fork_t fptr, void *args);
+void argolib_kernel(fork_t fptr, void *args)
+{
+        argolib_core_kernel(fptr, args);
+}
 
 /**
  * Creates an Argobot ULT that would execute a user method with the specified argument.
@@ -52,7 +37,10 @@ void argolib_kernel(fork_t fptr, void *args);
  * *It is the responsibility of the user to create a data structure capable of storing 
  * the created tasks in a recursive program.* Maybe not, threads array has all the created tasks.
  */
-Task_handle *argolib_fork(fork_t fptr, void *args);
+Task_handle *argolib_fork(fork_t fptr, void *args)
+{
+        return argolib_core_fork(fptr, args);
+}
 
 /**
  * Used for joining one more ULTs using the corresponding task handles. In case of more than one
@@ -62,7 +50,10 @@ Task_handle *argolib_fork(fork_t fptr, void *args);
  * However, the function requires an array of ABT_threads to join. So we need to use ABT_thread_join
  * internally which will join individula threads instead of all the threads in an Execution Stream.
  */
-void argolib_join(Task_handle **list, int size);
+void argolib_join(Task_handle **list, int size)
+{
+        argolib_core_join(list, size);
+}
 
 
 #endif
