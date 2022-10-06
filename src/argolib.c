@@ -27,6 +27,9 @@ int num_xstreams;
 int num_threads;
 
 pthread_mutex_t pplock;
+int net_push = 0;
+int net_pop = 0;
+
 int *pool_net_push;
 int *pool_net_pop;
 int *pool_head_push;
@@ -195,6 +198,9 @@ void argolib_finalize()
                 printf("\tStolen From: %d\n", pool_stolen_from[i]);
                 printf("\tPush: %d\tPop: %d\n", pool_net_push[i], pool_net_pop[i]);
         }
+        
+        printf("\tNet pushes: %d\n", net_push);
+        printf("\tNet pops: %d\n", net_pop);
 
         free(pool_head_push);
         free(pool_head_pop);
@@ -267,6 +273,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         if (!p_unit)
                 return ABT_THREAD_NULL;
         pthread_mutex_lock(&pplock);
+        net_pop++;
         pool_net_pop[rank]++;
         pthread_mutex_unlock(&pplock);
         return p_unit->thread;
@@ -283,6 +290,7 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
 
         pthread_mutex_lock(&p_pool->lock);
         pthread_mutex_lock(&pplock);
+        net_push++;
         pool_net_push[rank]++;
         pthread_mutex_unlock(&pplock);
         if (context & (ABT_POOL_CONTEXT_OP_THREAD_CREATE |
