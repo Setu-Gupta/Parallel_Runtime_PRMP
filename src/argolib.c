@@ -4,7 +4,6 @@
 ABT_xstream *xstreams;
 ABT_pool *pools;
 ABT_sched *scheds;
-ABT_thread *threads;
 thread_arg_t *thread_args;
 
 static void create_pools(int num, ABT_pool *pools);
@@ -30,7 +29,6 @@ struct pool_t {
 };
 
 int num_xstreams;
-int num_threads;
 
 pthread_mutex_t pplock;
 int net_push = 0;
@@ -47,8 +45,11 @@ int *pool_stole_from;
 
 void argolib_core_init(int argc, char **argv)
 {
-        num_xstreams = DEFAULT_NUM_XSTREAMS;
-        num_threads = DEFAULT_NUM_THREADS;
+        char* workers = getenv("ARGOLIB_WORKERS");
+        char* randomws = getenv("ARGOLIB_RANDOMWS");
+        
+        num_xstreams = workers ? atoi(workers) : 1;
+        bool is_randws = randomws ? (atoi(randomws) > 0 ? 1 : 0) : 0;
         
         pthread_mutex_init(&pplock, 0);
         pool_net_push = (int*)calloc(num_xstreams, sizeof(int));
@@ -59,19 +60,16 @@ void argolib_core_init(int argc, char **argv)
         pool_tail_pop = (int*)calloc(num_xstreams, sizeof(int));
         pool_stolen_from = (int*)calloc(num_xstreams, sizeof(int));
         pool_stole_from = (int*)calloc(num_xstreams, sizeof(int));
+        
 
-        int is_randws = 1;
         // Minimum size Execution Streams and Threads when taken from user
         if (num_xstreams <= 0)
                 num_xstreams = 1;
-        if (num_threads <= 0)
-                num_threads = 1;
 
         xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * num_xstreams);
         pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
         scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
 
-        threads = (ABT_thread *)malloc(sizeof(ABT_thread) * num_threads);
 
         ABT_init(argc, argv);
 
@@ -88,8 +86,8 @@ void argolib_core_init(int argc, char **argv)
                 {
                         if (is_randws)
                         {
-                                // ABT_pool_create_basic(ABT_POOL_RANDWS, ABT_POOL_ACCESS_MPMC,
-                                // 					  ABT_TRUE, &pools[i]);
+                                ABT_pool_create_basic(ABT_POOL_RANDWS, ABT_POOL_ACCESS_MPMC,
+                                 					  ABT_TRUE, &pools[i]);
                         }
                         else
                         {
@@ -118,6 +116,7 @@ void argolib_core_init(int argc, char **argv)
                         free(tmp);
                 }
         }
+        
         // Set the scheduler for the primary execution stream
         ABT_xstream_set_main_sched(xstreams[0], scheds[0]);
 
@@ -191,7 +190,6 @@ void argolib_core_finalize()
         free(xstreams);
         free(pools);
         free(scheds);
-        free(threads);
 
         for(int i = 0; i < num_xstreams; i++){
                 printf("Pool %d\n", i);
