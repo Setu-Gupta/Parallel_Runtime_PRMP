@@ -9,8 +9,16 @@ int fib(int n)
         if(n < 2)
                 return n;
         int x, y;
-        Task_handle* task1 = argolib::fork([&]() { x = fib(n-1); });
-        Task_handle* task2 = argolib::fork([&]() { y = fib(n-2); });
+        Task_handle* task1 = argolib::fork([&]() { x = fib(n-1);
+                        m.lock();
+                        std::cout << "for " << n-1 << " x:" << x << std::endl;
+                        m.unlock();
+                        });
+        Task_handle* task2 = argolib::fork([&]() { y = fib(n-2);
+                        m.lock();
+                        std::cout << "for " << n-2 << " y:" << y << std::endl;
+                        m.unlock();
+                        });
         argolib::join(task1, task2);
         m.lock();
         std::cout << "n:" << n << " x:" << x << " y:" << y << std::endl;
