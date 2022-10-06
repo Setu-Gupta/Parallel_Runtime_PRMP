@@ -7,10 +7,10 @@
 #define __ARGOLIB_HPP__
 
 #include <initializer_list>
-#include <argolib_core.h>
+#include "./../src/include/argolib_core.h"
 #include <functional>
 
-using FunctionCallback = std::function<void(void*)>;
+using FunctionCallback = std::function<void(void)>;
 namespace CLambdaWorkaround
 {
 
@@ -26,7 +26,7 @@ namespace CLambdaWorkaround
                 callback = func;
         }   
 
-        void lambda_adapter()
+        void lambda_adapter(void*)
         {   
                 get_callback()();
         }   
@@ -80,7 +80,7 @@ namespace argolib
         void join_impl(std::initializer_list<Task_handle*> handles)
         {
                 int size = handles.size();      // Get the number of handles passed
-                Task_handle* list[size];        // Create an array of handles to be passed to argolib
+                Task_handle** list = (Task_handle**)malloc(size * sizeof(Task_handle*));        // Create an array of handles to be passed to argolib
                 
                 // Populate the list by iterating over handles
                 int i = 0;
@@ -88,6 +88,7 @@ namespace argolib
                         list[i++] = th;
                 
                 argolib_core_join(list, size);       // Pass the list and the size to argolib
+                free(list);
         }
         
         // Called to join multiple tasks via their task handles

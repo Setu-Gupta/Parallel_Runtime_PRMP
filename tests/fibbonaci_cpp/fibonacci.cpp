@@ -1,3 +1,4 @@
+#include <iostream>
 #include <argolib.hpp>
 
 int fib(int n) {
@@ -8,7 +9,7 @@ int fib(int n) {
         argolib::join(task1, task2);
         return x+y;
 }
-int main(int argc, chat **argv) {
+int main(int argc, char **argv) {
         argolib::init(argc, argv);
         int result;
         argolib::kernel([&]() {

@@ -43,6 +43,24 @@ int *pool_tail_pop;
 int *pool_stolen_from;
 int *pool_stole_from;
 
+void print_stats()
+{
+
+        for(int i = 0; i < num_xstreams; i++)
+        {
+                printf("Pool %d\n", i);
+                printf("\tPush Head: %d\tPush Tail: %d\n", pool_head_push[i], pool_tail_push[i]);
+                printf("\tPop Head: %d\tPop Tail: %d\n", pool_head_pop[i], pool_tail_pop[i]);
+                printf("\tStolen From: %d\n", pool_stolen_from[i]);
+                printf("\tPush: %d\tPop: %d\n", pool_net_push[i], pool_net_pop[i]);
+        }
+        
+        printf("\n"); 
+        printf("Net pushes: %d\n", net_push);
+        printf("Net pops: %d\n", net_pop);
+
+}
+
 void argolib_core_init(int argc, char **argv)
 {
         char* workers = getenv("ARGOLIB_WORKERS");
@@ -172,12 +190,10 @@ void argolib_core_join(Task_handle **list, int size)
 
 void argolib_core_kernel(fork_t fptr, void *args)
 {
-        /**TODO
-         * Print Statistics
-         */
         Task_handle *kernel_task[1];
         kernel_task[0] = argolib_core_fork(fptr, args);
         argolib_core_join(kernel_task, 1);
+        print_stats();
 }
 
 
@@ -190,17 +206,6 @@ void argolib_core_finalize()
         free(xstreams);
         free(pools);
         free(scheds);
-
-        for(int i = 0; i < num_xstreams; i++){
-                printf("Pool %d\n", i);
-                printf("\tPush Head: %d\tPush Tail: %d\n", pool_head_push[i], pool_tail_push[i]);
-                printf("\tPop Head: %d\tPop Tail: %d\n", pool_head_pop[i], pool_tail_pop[i]);
-                printf("\tStolen From: %d\n", pool_stolen_from[i]);
-                printf("\tPush: %d\tPop: %d\n", pool_net_push[i], pool_net_pop[i]);
-        }
-        
-        printf("\tNet pushes: %d\n", net_push);
-        printf("\tNet pops: %d\n", net_pop);
 
         free(pool_head_push);
         free(pool_head_pop);

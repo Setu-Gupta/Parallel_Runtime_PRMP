@@ -34,12 +34,12 @@ release: $(TARGET)								# Set the default target as release for make
 debug: $(DEBUG_TARGET)								# Set the debug target for make
 
 $(TARGET): $(OBJECTS)								# Specify how to compile TARGET
-	$(CC) -L$(ARGOLIBPATH) $(CFLAGS) $(OPTFLAGS) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
+	$(CC) -L$(ARGOLIBPATH) $(CFLAGS) $(OPTFLAGS) -o $(TARGET) $(OBJECTS) $(LDFLAGS)
 $(OBJECTS): $(SRC)								# Specify how to compile OBJECTS
 	$(CC) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(OPTFLAGS) -c $^ -o $@
 
 $(DEBUG_TARGET) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGET
-	$(CC) -L$(ARGOLIBPATH) $(CFLAGS) $(DBGFLAGS) $(DEBUG_OBJECTS) -o $(DEBUG_TARGET) $(LDFLAGS)
+	$(CC) -L$(ARGOLIBPATH) $(CFLAGS) $(DBGFLAGS) -o $(DEBUG_TARGET) $(DEBUG_OBJECTS) $(LDFLAGS)
 $(DEBUG_OBJECTS): $(SRC)							# Specify how to compile DEBUG_OBJECTS
 	$(CC) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(DBGFLAGS) -c $^ -o $@
 
