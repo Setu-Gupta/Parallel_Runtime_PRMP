@@ -28,7 +28,7 @@ How to create custom tests:
         3. Go to your test directory
                 $ cd <test_dir>
         4. Copy the starting Makefile from tests/build_setup to tests/<test_dir>
-                $ cp ../build_setup/Makefile .
+                $ cp ../build_setup/<Relevant Makefile> .
         5. Modify the Makefile as per your requirements
         6. Copy the build and the bin directory structure to <test_dir>
                 $ cp ../build_setup/bin .
