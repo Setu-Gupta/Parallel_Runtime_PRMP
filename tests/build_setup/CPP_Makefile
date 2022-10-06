@@ -42,7 +42,7 @@ $(OBJECTS): $(SRC)								# Specify how to compile OBJECTS
 $(DEBUG_TARGETS) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGETS
 	$(CXX) -L$(ARGOLIB) -L$(DBGARGOLIB) $(DBGFLAGS) $^ -o $@ $(LDFLAGS)
 $(DEBUG_OBJECTS): $(SRC)							# Specify how to compile DEBUG_OBJECTS
-	$(CXX) -L$(ARGOLIB) -L$(DBGARGOLIB) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(DBGFLAGS) $(DBGFLAGS) -c $^ -o $@ $(LDFLAGS)
+	$(CXX) -L$(ARGOLIB) -L$(DBGARGOLIB) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(DBGFLAGS) -c $^ -o $@ $(LDFLAGS)
 
 .PHONY: help									# Specify the help target which prints the usage
 help:
