@@ -7,8 +7,12 @@
 #define __ARGOLIB_HPP__
 
 #include <initializer_list>
-#include "./../src/include/argolib_core.h"
 #include <functional>
+
+extern "C"      // Import C style functions 
+{
+        #include "./../src/include/argolib_core.h"
+}
 
 using FunctionCallback = std::function<void(void)>;
 namespace CLambdaWorkaround
