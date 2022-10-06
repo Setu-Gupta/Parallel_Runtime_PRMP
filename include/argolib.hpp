@@ -2,6 +2,7 @@
 // Ref: https://en.cppreference.com/w/cpp/utility/initializer_list
 // Ref: https://stackoverflow.com/questions/11030517/unknown-number-of-arguments-in-function
 // Ref: https://caiorss.github.io/C-Cpp-Notes/passing-lambda.html
+// Ref: https://stackoverflow.com/questions/73976001/g-undefined-reference-to-while-linking-with-a-custom-shared-library/73977954#73977954
 
 #ifndef __ARGOLIB_HPP__
 #define __ARGOLIB_HPP__
