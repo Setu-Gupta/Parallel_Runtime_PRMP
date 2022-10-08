@@ -23,7 +23,7 @@ namespace CLambdaWorkaround
         {   
 		static FunctionCallback callback;
                 return callback;
-        };  
+        }
 
         void set_callback(FunctionCallback func)
         {   

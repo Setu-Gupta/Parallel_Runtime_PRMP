@@ -27,6 +27,9 @@ void fib(fibonacci_arg_t* fib_arg)
     argolib_join(task_pair, 2);
 
     fib_arg->ret = x->ret + y->ret;
+
+    free(x);
+    free(y);
 }
 
 
