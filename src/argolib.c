@@ -275,8 +275,6 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                         p_unit = p_pool->p_head;
                         p_pool->p_head = NULL;
                         p_pool->p_tail = NULL;
-                        int rank;
-                        ABT_xstream_self_rank(&rank);
                         pool_head_pop[rank]++;
                 }
         }
@@ -443,7 +441,7 @@ static void sched_run(ABT_sched sched)
         {
                 /* Execute one work unit from the scheduler's pool */
                 ABT_thread thread;
-                ABT_pool_pop_thread(pools[0], &thread);
+                ABT_pool_pop_thread_ex(pools[0], &thread, ABT_POOL_CONTEXT_OWNER_PRIMARY);
                 if (thread != ABT_THREAD_NULL)
                 {
                         /* "thread" is associated with its original pool (pools[0]). */
@@ -454,7 +452,7 @@ static void sched_run(ABT_sched sched)
                         /* Steal a work unit from other pools */
                         target =
                             (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools - 1) + 1);
-                        ABT_pool_pop_thread(pools[target], &thread);
+                        ABT_pool_pop_thread_ex(pools[target], &thread, ABT_POOL_CONTEXT_OWNER_SECONDARY);
                         if (thread != ABT_THREAD_NULL)
                         {
                                 /* "thread" is associated with its original pool
