@@ -68,6 +68,15 @@ void print_stats()
         printf("Net pops: %d\n", net_pop);
 }
 
+void print_shared_counter(){
+        printf("Shared Counters: \n");
+        for (int i = 0; i < num_xstreams; i++)
+        {
+                printf("%d: %d\t", i, sharedCounter[i]);
+        }
+        printf("\n");
+}
+
 void argolib_core_init(int argc, char **argv)
 {
         char *workers = getenv("ARGOLIB_WORKERS");
@@ -286,7 +295,6 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         int rank;
         ABT_xstream_self_rank(&rank);
 
-        unsigned seed = time(NULL);
         int target;
 
         bool isValidRequest = false;
@@ -302,6 +310,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                 printf("Valid Request\n");
                 requesterRank = requestBox[rank];
                 // There is a request in the Request Box
+
                 // Pop from the Tail
                 p_unit = p_pool->p_tail;
                 p_pool->p_tail = p_unit->p_next;
@@ -309,8 +318,9 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                 pool_stolen_from[rank]++;
 
                 pthread_mutex_lock(&p_pool->lock);
-                sharedCounter[rank]--;
-                mailBox[requesterRank] = p_unit;
+                sharedCounter[rank]--;  //Decrement shared counter due to pop from tail
+                mailBox[requesterRank] = p_unit;        // Put the popped thread on the requesters Mailbox
+                requestBox[rank] = -1;   // Clear The request
                 pthread_mutex_unlock(&p_pool->lock);
         }
 
@@ -338,12 +348,16 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
                         while (!requestSent)
                         {
+                                // unsigned seed = time(NULL);
                                 // Both Deque and Mailbox are empty
                                 // Send request to a Worker with non-empty deque
-                                target = (num_xstreams == 2) ? 1 : (rand_r(&seed) % (num_xstreams - 1) + 1);
+                                time_t t;
+                                srand((unsigned) time(&t));
+                                target = rand() % num_xstreams;
 
-                                if (sharedCounter[target] >= 2)
+                                if (target != rank && sharedCounter[target] >= 2 && requestBox[target] == -1)
                                 {
+                                        // print_shared_counter();
                                         // Take lock on Request Box as it is read by the Victim as well
                                         pthread_mutex_lock(&p_pool->lock);
                                         // Put a Steal Request in the Request Box
@@ -351,8 +365,9 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                         pthread_mutex_unlock(&p_pool->lock);
 
                                         requestSent = true;
+                                        printf("Request Sent by Worker %d to Worker %d\n", rank, target);
                                 }
-                        } // Potential Deadlock if only 2 ES and Stealer is empty and the other worker has only 1 or 0 threads
+                        } // TODO: Potential Deadlock if only 2 ES and Stealer is empty and the other worker has only 1 or 0 threads
                 }
         }
         else if (p_pool->p_head == p_pool->p_tail)
@@ -446,6 +461,7 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
                 pool_tail_push[rank]++;
         }
         sharedCounter[rank]++;
+        // print_shared_counter();
         pthread_mutex_unlock(&p_pool->lock);
 }
 
