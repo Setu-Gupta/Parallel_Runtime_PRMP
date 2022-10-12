@@ -7,16 +7,10 @@
 #include <stdbool.h>
 #include <abt.h>
 
-// For giving an ID to each thread
-typedef struct
-{
-    void* args; //Pointer to the real arguments to the function
-    int tid;    //ID to each thread
-} thread_arg_t;
-
 typedef ABT_thread Task_handle;
 typedef void (*fork_t)(void* args);
 
+// Core argolib API functions
 void argolib_core_init(int argc, char ** argv);
 void argolib_core_finalize();
 void argolib_core_kernel(fork_t fptr, void* args);
