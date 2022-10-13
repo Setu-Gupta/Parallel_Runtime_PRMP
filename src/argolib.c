@@ -70,7 +70,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         ABT_xstream_self_rank(&rank);
         
         pool_t *p_pool;
-        ABT_pool_get_data(pool, (void **)&p_pool);
+        ABT_pool_get_data(pools[rank], (void **)&p_pool);
         unit_t *p_unit = NULL;
 
         // Pop only if the current thread belongs to this pool
@@ -84,9 +84,6 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                         // First Check the Mailbox for a task
                         if (mailBox[rank] != NULL)
                         {
-                                // TODO: Remove
-                                printf("MailBox Non-Empty at %d\n", rank);
-
                                 // There is a task in Mailbox; pop it
                                 p_unit = mailBox[rank]; // Variable that returns the thread
                                 mailBox[rank] = NULL;   // Empty the Mailbox
@@ -99,7 +96,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                 {
                                         // Send request to a Worker with non-empty deque
                                         int num_victim_tasks = __atomic_load_n(&sharedCounter[target], __ATOMIC_SEQ_CST);
-                                        if(num_victim_tasks >= 0)
+                                        if(num_victim_tasks >= 1)
                                         {
                                                 // Put a Steal Request in the Request Box
                                                 int expected = -1;
@@ -107,8 +104,6 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                                 if(requestSent)
                                                 {
                                                         pool_stole[rank]++;
-                                                        // TODO: Remove
-                                                        printf("Request Sent by Worker %d to Worker %d\n", rank, target);
 
                                                         // Wait for a task
                                                         pthread_mutex_lock(&cond_mutexes[rank]);
@@ -120,9 +115,6 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                         target = (target + 1) % num_xstreams;
                                 } 
                         }
-                
-                        if(!p_unit)
-                                printf("%d could not send request\n", rank);
                 }
                 else if (p_pool->p_head == p_pool->p_tail)
                 {
@@ -152,23 +144,20 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
 static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
 {
-        pool_t *p_pool;
-        ABT_pool_get_data(pool, (void **)&p_pool);
-        unit_t *p_unit = (unit_t *)unit;
-
         int rank;
         ABT_xstream_self_rank(&rank);
+        
+        pool_t *p_pool;
+        ABT_pool_get_data(pools[rank], (void **)&p_pool);
+        unit_t *p_unit = (unit_t *)unit;
         
         // Lock the pool
         pthread_mutex_lock(&p_pool->lock);
         
         // Fullfill requests
         int requesterRank = __atomic_load_n(&requestBox[rank], __ATOMIC_SEQ_CST);
-        if (requesterRank != -1)        // If there is a request available
+        if (requesterRank != -1 && p_pool->p_tail)        // If there is a request and a task available
         {
-                // TODO: Remove after debugging
-                printf("Valid Request\n");
-
                 // Pop from the tail and try to assign the task to the requester
                 p_unit = p_pool->p_tail;
                 p_pool->p_tail = p_unit->p_next;
@@ -193,7 +182,6 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         
         pthread_mutex_unlock(&p_pool->lock);
         __atomic_add_fetch(&sharedCounter[rank], 1, __ATOMIC_SEQ_CST);
-        printf("Tasks at %d: %d\n", rank, sharedCounter[rank]);
 }
 
 static int pool_init(ABT_pool pool, ABT_pool_config config)
