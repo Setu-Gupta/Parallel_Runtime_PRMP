@@ -66,6 +66,9 @@ static ABT_bool pool_is_empty(ABT_pool pool)
 
 static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 {
+        int rank;
+        ABT_xstream_self_rank(&rank);
+        
         pool_t *p_pool;
         ABT_pool_get_data(pool, (void **)&p_pool);
         unit_t *p_unit = NULL;
@@ -73,58 +76,53 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         // Pop only if the current thread belongs to this pool
         if(context & ABT_POOL_CONTEXT_OWNER_PRIMARY)
         {
-                int rank;
-                ABT_xstream_self_rank(&rank);
-
                 // Handle regular deque operations and stealing
                 pthread_mutex_lock(&p_pool->lock);
-                if (p_pool->p_head == NULL)
+                // Make requests since there are no threads available
+                if (p_pool->p_head == NULL) // If no threads are available
                 {
-                        // Make requests since there are no threads available
-                        if (p_pool->p_head == NULL) // If no threads are available
+                        // First Check the Mailbox for a task
+                        if (mailBox[rank] != NULL)
                         {
-                                // First Check the Mailbox for a task
-                                if (mailBox[rank] != NULL)
-                                {
-                                        // TODO: Remove
-                                        printf("MailBox Non-Empty at %d\n", rank);
+                                // TODO: Remove
+                                printf("MailBox Non-Empty at %d\n", rank);
 
-                                        // There is a task in Mailbox; pop it
-                                        p_unit = mailBox[rank]; // Variable that returns the thread
-                                        mailBox[rank] = NULL;   // Empty the Mailbox
-                                }
-                                else    // Make a request
-                                {
-                                        bool requestSent = false;
-                                        int target = (rank + 1) % num_xstreams;
-                                        while (!requestSent && target != rank)
-                                        {
-                                                // Send request to a Worker with non-empty deque
-                                                int num_victim_tasks = __atomic_load_n(&sharedCounter[target], __ATOMIC_SEQ_CST);
-
-                                                if(num_victim_tasks >= 0)
-                                                {
-                                                        // Put a Steal Request in the Request Box
-                                                        unit_t* expected = NULL;
-                                                        requestSent = __atomic_compare_exchange_n(&requestBox[target], &expected, rank, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-                                                        if(requestSent)
-                                                        {
-                                                                pool_stole[rank]++;
-                                                                // TODO: Remove
-                                                                printf("Request Sent by Worker %d to Worker %d\n", rank, target);
-
-                                                                // Wait for a task
-                                                                pthread_mutex_lock(&cond_mutexes[rank]);
-                                                                pthread_cond_wait(&cond_vars[rank], &cond_mutexes[rank]);
-                                                                p_unit = mailBox[rank];
-                                                                pthread_mutex_unlock(&cond_mutexes[rank]);
-                                                        }
-                                                }
-                                                target = (target + 1) % num_xstreams;
-                                        } 
-                                }
-
+                                // There is a task in Mailbox; pop it
+                                p_unit = mailBox[rank]; // Variable that returns the thread
+                                mailBox[rank] = NULL;   // Empty the Mailbox
                         }
+                        else    // Make a request
+                        {
+                                bool requestSent = false;
+                                int target = (rank + 1) % num_xstreams;
+                                while (!requestSent && target != rank)
+                                {
+                                        // Send request to a Worker with non-empty deque
+                                        int num_victim_tasks = __atomic_load_n(&sharedCounter[target], __ATOMIC_SEQ_CST);
+                                        if(num_victim_tasks >= 0)
+                                        {
+                                                // Put a Steal Request in the Request Box
+                                                int expected = -1;
+                                                requestSent = __atomic_compare_exchange_n(&requestBox[target], &expected, rank, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+                                                if(requestSent)
+                                                {
+                                                        pool_stole[rank]++;
+                                                        // TODO: Remove
+                                                        printf("Request Sent by Worker %d to Worker %d\n", rank, target);
+
+                                                        // Wait for a task
+                                                        pthread_mutex_lock(&cond_mutexes[rank]);
+                                                        pthread_cond_wait(&cond_vars[rank], &cond_mutexes[rank]);
+                                                        p_unit = mailBox[rank];
+                                                        pthread_mutex_unlock(&cond_mutexes[rank]);
+                                                }
+                                        }
+                                        target = (target + 1) % num_xstreams;
+                                } 
+                        }
+                
+                        if(!p_unit)
+                                printf("%d could not send request\n", rank);
                 }
                 else if (p_pool->p_head == p_pool->p_tail)
                 {
@@ -160,7 +158,7 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
 
         int rank;
         ABT_xstream_self_rank(&rank);
-
+        
         // Lock the pool
         pthread_mutex_lock(&p_pool->lock);
         
@@ -191,11 +189,11 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         if (p_pool->p_head)    // If pool is not empty
                 p_unit->p_prev = p_pool->p_head;
         p_pool->p_head = p_unit;
-        
         pool_head_push[rank]++;
-        pthread_mutex_unlock(&p_pool->lock);
         
+        pthread_mutex_unlock(&p_pool->lock);
         __atomic_add_fetch(&sharedCounter[rank], 1, __ATOMIC_SEQ_CST);
+        printf("Tasks at %d: %d\n", rank, sharedCounter[rank]);
 }
 
 static int pool_init(ABT_pool pool, ABT_pool_config config)
@@ -271,9 +269,7 @@ static void sched_run(ABT_sched sched)
         sched_data_t *p_data;
         int num_pools;
         ABT_pool *pools;
-        // int target;
         ABT_bool stop;
-        // unsigned seed = time(NULL);
 
         ABT_sched_get_data(sched, (void **)&p_data);
         ABT_sched_get_num_pools(sched, &num_pools);
@@ -284,30 +280,11 @@ static void sched_run(ABT_sched sched)
         {
                 /* Execute one work unit from the scheduler's pool */
                 ABT_thread thread;
-                ABT_pool_pop_thread_ex(pools[0], &thread, ABT_POOL_CONTEXT_OWNER_PRIMARY);
+                int rank;
+                ABT_xstream_self_rank(&rank);
+                ABT_pool_pop_thread_ex(pools[rank], &thread, ABT_POOL_CONTEXT_OWNER_PRIMARY);
                 if (thread != ABT_THREAD_NULL)
-                {
-                        /* "thread" is associated with its original pool (pools[0]). */
                         ABT_self_schedule(thread, ABT_POOL_NULL);
-                }
-
-                // If thread == ABT_THREAD_NULL, then the main pool must have requested
-                // another pool for a steal. Now we need to wait for the other pool to serve
-                // the request and eventually, we would have a task after it has served our request.
-
-                // else if (num_pools > 1)
-                // {
-                //         /* Steal a work unit from other pools */
-                //         target =
-                //             (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools - 1) + 1);
-                //         ABT_pool_pop_thread_ex(pools[target], &thread, ABT_POOL_CONTEXT_OWNER_SECONDARY);
-                //         if (thread != ABT_THREAD_NULL)
-                //         {
-                //                 /* "thread" is associated with its original pool
-                //                  * (pools[target]). */
-                //                 ABT_self_schedule(thread, pools[target]);
-                //         }
-                // }
 
                 if (++work_count >= p_data->event_freq)
                 {
