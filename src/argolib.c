@@ -108,8 +108,8 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                                         // Wait for a task
                                                         pthread_mutex_lock(&cond_mutexes[rank]);
                                                         pthread_cond_wait(&cond_vars[rank], &cond_mutexes[rank]);
-                                                        p_unit = mailBox[rank];
                                                         pthread_mutex_unlock(&cond_mutexes[rank]);
+                                                        p_unit = mailBox[rank];
                                                 }
                                         }
                                         target = (target + 1) % num_xstreams;
