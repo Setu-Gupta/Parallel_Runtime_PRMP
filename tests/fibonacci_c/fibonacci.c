@@ -38,11 +38,11 @@ int main(int argc, char **argv) {
     int result;
     fibonacci_arg_t* arg;
     arg = (fibonacci_arg_t*) malloc(sizeof(fibonacci_arg_t));
-    arg->n = 20;
+    arg->n = 27;
     arg->ret = 0;
     argolib_kernel((fork_t)fib, (void*)arg);
     result = arg->ret;
-    printf("Fib(20) = %d\n", result);
+    printf("Fib(27) = %d\n", result);
     argolib_finalize();
     free(arg);
     return 0;

@@ -1,13 +1,20 @@
-// Ref: https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html
 #include <argolib_core.h>
 
 // Global variables
-ABT_xstream *xstreams = NULL; // Array of handles to execution streams
-ABT_pool *pools = NULL;       // Array of handles to task pools
-ABT_sched *scheds = NULL;     // Array of handles to schedulers
+ABT_xstream *xstreams;
+ABT_pool *pools;
+ABT_sched *scheds;
 
-// This structure represents a deque node
+static void create_pools(int num, ABT_pool *pools);
+static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds);
+
+/** Creating Pool for Work Stealing Runtime
+ *
+ */
+
 typedef struct unit_t unit_t;
+typedef struct pool_t pool_t;
+
 struct unit_t
 {
         unit_t *p_prev;
@@ -15,33 +22,253 @@ struct unit_t
         ABT_thread thread;
 };
 
-// This structure defines a task pool
-typedef struct pool
+struct pool_t
 {
-        pthread_mutex_t lock; // Per pool lock which is used to access the deque
-        unit_t *p_head;       // Head of the deque
-        unit_t *p_tail;       // Tail of the deque
-} pool_t;
+        pthread_mutex_t lock;
+        unit_t *p_head;
+        unit_t *p_tail;
+};
 
-// Global variable that holds the number of execution streams being used
-int num_xstreams = 0;
+int num_xstreams;
 
-unit_t **mailBox = NULL;              // An array of deque nodes which are used for stealing tasks
-int *sharedCounter = NULL;            // An array of counters which track the number of tasks in the deque
-int *requestBox = NULL;               // An array of request boxes
-pthread_cond_t *cond_vars = NULL;     // An array of condition variables to notify thieves
-pthread_mutex_t *cond_mutexes = NULL; // An array of mutexes to notify thieves
+unit_t **mailBox;
+int *sharedCounter;
+int *requestBox;
+bool *requestSent;
+bool *requestServed;
 
-// Various arrays to keep track of the statistics
-int *pool_head_push = NULL;
-int *pool_head_pop = NULL;
-int *pool_tail_push = NULL;
-int *pool_tail_pop = NULL;
-int *pool_stolen_from = NULL;
-int *pool_stole = NULL;
+pthread_mutex_t pplock;
+int net_push = 0;
+int net_pop = 0;
 
-//==================================================== Creating pools for Work Stealing ==========================================
+int *pool_net_push;
+int *pool_net_pop;
+int *pool_head_push;
+int *pool_head_pop;
+int *pool_tail_push;
+int *pool_tail_pop;
+int *pool_stolen_from;
+int *pool_stole_from;
 
+int *mailBox_task;
+
+void print_stats()
+{
+
+        for (int i = 0; i < num_xstreams; i++)
+        {
+                printf("Pool %d\n", i);
+                printf("\tPush Head: %d\tPush Tail: %d\n", pool_head_push[i], pool_tail_push[i]);
+                printf("\tPop Head: %d\tPop Tail: %d\n", pool_head_pop[i], pool_tail_pop[i]);
+                printf("\tStolen From: %d\n", pool_stolen_from[i]);
+                printf("\tPush: %d\tPop: %d\n", pool_net_push[i], pool_net_pop[i]);
+        }
+
+        printf("\n");
+        printf("Net pushes: %d\n", net_push);
+        printf("Net pops: %d\n", net_pop);
+}
+
+void print_shared_counter(){
+        printf("Shared Counters: \n");
+        for (int i = 0; i < num_xstreams; i++)
+        {
+                printf("%d: %d\t", i, sharedCounter[i]);
+        }
+        printf("\n");
+}
+
+void argolib_core_init(int argc, char **argv)
+{
+        char *workers = getenv("ARGOLIB_WORKERS");
+        char *randomws = getenv("ARGOLIB_RANDOMWS");
+
+        num_xstreams = workers ? atoi(workers) : 1;
+        bool is_randws = randomws ? (atoi(randomws) > 0 ? 1 : 0) : 0;
+
+        pthread_mutex_init(&pplock, 0);
+        pool_net_push = (int *)calloc(num_xstreams, sizeof(int));
+        pool_net_pop = (int *)calloc(num_xstreams, sizeof(int));
+        pool_head_push = (int *)calloc(num_xstreams, sizeof(int));
+        pool_head_pop = (int *)calloc(num_xstreams, sizeof(int));
+        pool_tail_push = (int *)calloc(num_xstreams, sizeof(int));
+        pool_tail_pop = (int *)calloc(num_xstreams, sizeof(int));
+        pool_stolen_from = (int *)calloc(num_xstreams, sizeof(int));
+        pool_stole_from = (int *)calloc(num_xstreams, sizeof(int));
+
+        mailBox_task = (int *)calloc(num_xstreams, sizeof(int));
+
+        // Minimum size Execution Streams and Threads when taken from user
+        if (num_xstreams <= 0)
+                num_xstreams = 1;
+
+        xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * num_xstreams);
+        pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
+        scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
+
+        mailBox = (unit_t **)malloc(sizeof(unit_t*) * num_xstreams);
+        sharedCounter = (int *)calloc(num_xstreams, sizeof(int));
+        requestBox = (int *)calloc(num_xstreams, sizeof(int));
+        requestSent = (bool *)calloc(num_xstreams, sizeof(bool));
+        requestServed = (bool *)calloc(num_xstreams, sizeof(bool));
+
+        for (int i = 0; i < num_xstreams; i++)
+        {
+                requestBox[i] = -1; // Initialize Request Box IDs with -1
+                mailBox[i] = NULL;
+                requestSent[i] = false;
+                requestServed[i] = false;
+        }
+
+        ABT_init(argc, argv);
+
+        /* Set up a primary execution stream. */
+        ABT_xstream_self(&xstreams[0]);
+
+        /* Create pools. */
+
+        if (is_randws)
+                create_pools(num_xstreams, pools);
+        else
+        {
+                for (int i = 0; i < num_xstreams; i++)
+                {
+                        if (is_randws)
+                        {
+                                ABT_pool_create_basic(ABT_POOL_RANDWS, ABT_POOL_ACCESS_MPMC,
+                                                      ABT_TRUE, &pools[i]);
+                        }
+                        else
+                        {
+                                ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE,
+                                                      &pools[i]);
+                        }
+                }
+        }
+
+        /* Create schedulers. */
+        if (is_randws)
+                create_scheds(num_xstreams, pools, scheds);
+        else
+        {
+                for (int i = 0; i < num_xstreams; i++)
+                {
+                        ABT_pool *tmp = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
+                        for (int j = 0; j < num_xstreams; j++)
+                        {
+                                tmp[j] = pools[(i + j) % num_xstreams];
+                        }
+                        //?Difference between ABT_POOL_RANDWS and ABT_SCHED_RANDWS?
+                        ABT_sched_create_basic(ABT_SCHED_DEFAULT, num_xstreams, tmp,
+                                               ABT_SCHED_CONFIG_NULL, &scheds[i]);
+                        free(tmp);
+                }
+        }
+
+        // Set the scheduler for the primary execution stream
+        ABT_xstream_set_main_sched(xstreams[0], scheds[0]);
+
+        /* Create secondary execution streams. */
+        for (int i = 1; i < num_xstreams; i++)
+        {
+                ABT_xstream_create(scheds[i], &xstreams[i]);
+        }
+}
+
+Task_handle *argolib_core_fork(fork_t fptr, void *args)
+{
+        /** Create ULTs.
+         * The pool associated with this thread is same as the pool of the caller.
+         * thread_pointer will be returned to the caller hence defined static.
+         * Preferably, the caller should pass a thread_arg_t pointer
+         */
+        Task_handle *thread_pointer = (Task_handle *)malloc(sizeof(Task_handle));
+
+        int rank;
+        ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
+        ABT_pool target_pool = pools[rank];
+        // printf("Forked from ES %d\n", rank);
+        //  When should we use ABT_thread_create_to ?
+        //  This internally pushes the thread into the pool
+        ABT_thread_create(target_pool, fptr, args,
+                          ABT_THREAD_ATTR_NULL, thread_pointer);
+
+        return thread_pointer;
+}
+
+void argolib_core_join(Task_handle **list, int size)
+{
+        // First join all the threads
+        // ABT_thread_join might not be needed. Confirm!
+        for (int i = 0; i < size; i++)
+        {
+                ABT_thread_join((*list[i]));
+        }
+
+        // Free all the threads
+        for (int i = 0; i < size; i++)
+        {
+                ABT_thread_free(list[i]);
+        }
+
+        // Free all the thread pointers allocated in fork
+        for (int i = 0; i < size; i++)
+        {
+                free(list[i]);
+        }
+}
+
+void argolib_core_kernel(fork_t fptr, void *args)
+{
+        // Task_handle *kernel_task[1];
+        // kernel_task[0] = argolib_core_fork(fptr, args);
+        // argolib_core_join(kernel_task, 1);
+        double timeStart = ABT_get_wtime(); // Gives current time in S
+        fptr(args);
+        double timeEnd = ABT_get_wtime();
+
+        printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0);
+
+        print_stats();
+}
+
+void argolib_core_finalize()
+{
+        // Waiting for all Execution Streams to finish
+        // Freeing Execution streams after they are finished
+        for (int i = 1; i < num_xstreams; i++)
+        {
+                ABT_xstream_join(xstreams[i]);
+                ABT_xstream_free(&xstreams[i]);
+        }
+
+        // Freeing all the schedulers
+        for (int i = 1; i < num_xstreams; i++)
+        {
+                ABT_sched_free(&scheds[i]);
+        }
+        // Finalize argobots
+        ABT_finalize();
+
+        // Free allocated memory
+        free(xstreams);
+        free(pools);
+        free(scheds);
+
+        free(mailBox);
+        free(requestBox);
+        free(sharedCounter);
+
+        free(pool_head_push);
+        free(pool_head_pop);
+        free(pool_tail_push);
+        free(pool_tail_pop);
+        free(pool_stolen_from);
+        free(pool_stole_from);
+}
+
+// Custom Work Stealing
+/* Pool functions */
 static ABT_unit pool_create_unit(ABT_pool pool, ABT_thread thread)
 {
         unit_t *p_unit = (unit_t *)calloc(1, sizeof(unit_t));
@@ -66,128 +293,175 @@ static ABT_bool pool_is_empty(ABT_pool pool)
 
 static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 {
+        pool_t *p_pool;
+        ABT_pool_get_data(pool, (void **)&p_pool);
+        unit_t *p_unit = NULL;
+
         int rank;
         ABT_xstream_self_rank(&rank);
 
-        pool_t *p_pool;
-        ABT_pool_get_data(pools[rank], (void **)&p_pool);
-        unit_t *p_unit = NULL;
+        int target;
 
-        // Pop only if the current thread belongs to this pool
-        if (context & ABT_POOL_CONTEXT_OWNER_PRIMARY)
+        bool isValidRequest = false;
+        int requesterRank;
+
+        // Always First check if there is a request in the Request Box
+        pthread_mutex_lock(&p_pool->lock);
+        isValidRequest = requestBox[rank] != -1;
+        if (isValidRequest)
         {
-                // Handle regular deque operations and stealing
-                pthread_mutex_lock(&p_pool->lock);
-                // Make requests since there are no threads available
-                if (p_pool->p_head == NULL) // If no threads are available
+                printf("Valid Request\n");
+                requesterRank = requestBox[rank];
+                // There is a request in the Request Box
+
+                // Pop from the Tail
+                p_unit = p_pool->p_tail;
+                p_pool->p_tail = p_unit->p_next;
+                pool_tail_pop[rank]++;
+                pool_stolen_from[rank]++;
+
+                sharedCounter[rank]--;  //Decrement shared counter due to pop from tail
+                mailBox[requesterRank] = p_unit;        // Put the popped thread on the requesters Mailbox
+                requestBox[rank] = -1;   // Clear The request
+
+                requestServed[requesterRank] = true;
+        }
+        // pthread_mutex_unlock(&p_pool->lock);
+
+        // pthread_mutex_lock(&p_pool->lock);
+        if (p_pool->p_head == NULL)
+        {
+                /* Empty. */
+                // First Check the Mailbox for a task
+                if (mailBox[rank] != NULL)
                 {
-                        // First Check the Mailbox for a task
-                        if (mailBox[rank] != NULL)
-                        {
+                        printf("MailBox Non-Empty at %d\n", rank);
+                        // Take Mutex on Mailbox as it can be Written by the Victim as well
+                        // pthread_mutex_lock(&p_pool->lock);
+                        // {
                                 // There is a task in Mailbox; pop it
                                 p_unit = mailBox[rank]; // Variable that returns the thread
                                 mailBox[rank] = NULL;   // Empty the Mailbox
-                        }
-                        else // Make a request
-                        {
-                                bool requestSent = false;
-                                int target = (rank + 1) % num_xstreams;
-                                while (!requestSent && target != rank)
-                                {
-                                        // Send request to a Worker with non-empty deque
-                                        int num_victim_tasks = __atomic_load_n(&sharedCounter[target], __ATOMIC_SEQ_CST);
-                                        if (num_victim_tasks >= 1)
-                                        {
-                                                // Put a Steal Request in the Request Box
-                                                int expected = -1;
-                                                requestSent = __atomic_compare_exchange_n(&requestBox[target], &expected, rank, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-                                                if (requestSent)
-                                                {
-                                                        pool_stole[rank]++;
-
-                                                        // Wait for a task
-                                                        pthread_mutex_lock(&cond_mutexes[rank]);
-                                                        pthread_cond_wait(&cond_vars[rank], &cond_mutexes[rank]);
-                                                        pthread_mutex_unlock(&cond_mutexes[rank]);
-                                                        p_unit = mailBox[rank];
-                                                }
-                                        }
-                                        target = (target + 1) % num_xstreams;
-                                }
-                        }
+                                mailBox_task[rank]++;
+                        // }
+                        // pthread_mutex_unlock(&p_pool->lock);
                 }
-                else if (p_pool->p_head == p_pool->p_tail)
+                else if(!requestSent[rank])
                 {
-                        /* Only one thread. */
+                        for(int i = (rank + 1) % num_xstreams; i != rank; i = (i + 1) % num_xstreams)
+                        {
+                                // Both Deque and Mailbox are empty
+                                // Send request to a Worker with non-empty deque
+                                target = i;
+
+                                pthread_mutex_lock(&pplock);
+                                int targetRequestBox = requestBox[target];
+                                pthread_mutex_unlock(&pplock);
+
+                                if (sharedCounter[target] >= 10 && targetRequestBox == -1)
+                                {
+                                        // Take lock on Request Box as it is read by the Victim as well
+                                        pthread_mutex_lock(&pplock);
+                                        // Put a Steal Request in the Request Box
+                                        printf("Current Request box value seen by Worker %d for Target %d is %d\n", rank, target, requestBox[target]);
+                                        requestBox[target] = rank;      //Critical Section as multiple workers may be able to put request
+                                        pthread_mutex_unlock(&pplock);
+
+                                        printf("Request Sent by Worker %d to Worker %d\n", rank, target);
+                                        requestSent[rank] = true;
+                                        break;
+                                }
+                        } // TODO: Potential Deadlock if only 2 ES and Stealer is empty and the other worker has only 1 or 0 threads
+                } else if(requestServed[rank]){
+                        requestSent[rank] = false;
+                        requestServed[rank] = false;
+                }
+        }
+        else if (p_pool->p_head == p_pool->p_tail)
+        {
+                { /* Only one thread. */
                         p_unit = p_pool->p_head;
                         p_pool->p_head = NULL;
                         p_pool->p_tail = NULL;
                         pool_head_pop[rank]++;
+                        // pthread_mutex_lock(&p_pool->lock);
                         sharedCounter[rank]--;
+                        // pthread_mutex_unlock(&p_pool->lock);
                 }
-                else
-                {
-                        /* Pop from the head. */
-                        p_unit = p_pool->p_head;
-                        p_pool->p_head = p_unit->p_prev;
-                        pool_head_pop[rank]++;
-                        __atomic_sub_fetch(&sharedCounter[rank], 1, __ATOMIC_SEQ_CST);
-                }
-                pthread_mutex_unlock(&p_pool->lock);
         }
+        else
+        {
+                /* Pop from the head. */
+                p_unit = p_pool->p_head;
+                p_pool->p_head = p_unit->p_prev;
+                pool_head_pop[rank]++;
+                // pthread_mutex_lock(&p_pool->lock);
+                sharedCounter[rank]--;
+                // pthread_mutex_unlock(&p_pool->lock);
+        }
+        pthread_mutex_unlock(&p_pool->lock);
 
         if (!p_unit)
                 return ABT_THREAD_NULL;
-
+        // pthread_mutex_lock(&pplock);
+        net_pop++;
+        pool_net_pop[rank]++;
+        // pthread_mutex_unlock(&pplock);
         return p_unit->thread;
 }
 
 static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
 {
+        pool_t *p_pool;
+        ABT_pool_get_data(pool, (void **)&p_pool);
+        unit_t *p_unit = (unit_t *)unit;
+
         int rank;
         ABT_xstream_self_rank(&rank);
 
-        pool_t *p_pool;
-        ABT_pool_get_data(pools[rank], (void **)&p_pool);
-        unit_t *p_unit = (unit_t *)unit;
-
-        // Lock the pool
         pthread_mutex_lock(&p_pool->lock);
-
-        // Fullfill requests
-        int requesterRank = __atomic_load_n(&requestBox[rank], __ATOMIC_SEQ_CST);
-        if (requesterRank != -1 && p_pool->p_tail) // If there is a request and a task available
+        // pthread_mutex_lock(&pplock);
+        net_push++;
+        pool_net_push[rank]++;
+        // pthread_mutex_unlock(&pplock);
+        if (context & (ABT_POOL_CONTEXT_OP_THREAD_CREATE |
+                       ABT_POOL_CONTEXT_OP_THREAD_CREATE_TO |
+                       ABT_POOL_CONTEXT_OP_THREAD_REVIVE |
+                       ABT_POOL_CONTEXT_OP_THREAD_REVIVE_TO))
         {
-                // Pop from the tail and try to assign the task to the requester
-                p_unit = p_pool->p_tail;
-                p_pool->p_tail = p_unit->p_next;
-
-                // Assign the task and signal the requester
-                pthread_mutex_lock(&cond_mutexes[requesterRank]);
-                mailBox[requesterRank] = p_unit;
-                pthread_cond_signal(&cond_vars[requesterRank]);
-                pthread_mutex_unlock(&cond_mutexes[requesterRank]);
-
-                pool_stolen_from[rank]++;
-                pool_tail_pop[rank]++;
-                sharedCounter[rank]--; // Decrement the counter as one job was popped
-                requestBox[rank] = -1; // Clear The request box
+                /* Push to the head. */
+                if (p_pool->p_head)
+                {
+                        p_unit->p_prev = p_pool->p_head;
+                        p_pool->p_head->p_next = p_unit;
+                }
+                else
+                {
+                        p_pool->p_tail = p_unit;
+                }
+                p_pool->p_head = p_unit;
+                pool_head_push[rank]++;
         }
-
-        // Perform regular deque function, i.e. push to the head
-        if (p_pool->p_head)     //If pool is non-empty
+        else
         {
-                p_unit->p_prev = p_pool->p_head;
-                p_pool->p_head->p_next = p_unit;
-        }
-        else // If pool is empty 
+                /* Push to the tail. */
+                if (p_pool->p_tail)
+                {
+                        // Pool is non-empty
+                        p_unit->p_next = p_pool->p_tail;
+                        p_pool->p_tail->p_prev = p_unit;
+                }
+                else
+                {
+                        // Pool is empty
+                        p_pool->p_head = p_unit;
+                }
                 p_pool->p_tail = p_unit;
-        
-        p_pool->p_head = p_unit;
-        pool_head_push[rank]++;
-
+                pool_tail_push[rank]++;
+        }
+        sharedCounter[rank]++;
+        // print_shared_counter();
         pthread_mutex_unlock(&p_pool->lock);
-        __atomic_add_fetch(&sharedCounter[rank], 1, __ATOMIC_SEQ_CST);
 }
 
 static int pool_init(ABT_pool pool, ABT_pool_config config)
@@ -240,7 +514,8 @@ static void create_pools(int num, ABT_pool *pools)
         ABT_pool_config_free(&config);
 }
 
-//==================================================== Creating schedulers for Work Stealing ==========================================
+/** Creating Scheduler for Work Stealing
+ */
 
 typedef struct
 {
@@ -263,7 +538,9 @@ static void sched_run(ABT_sched sched)
         sched_data_t *p_data;
         int num_pools;
         ABT_pool *pools;
+        // int target;
         ABT_bool stop;
+        // unsigned seed = time(NULL);
 
         ABT_sched_get_data(sched, (void **)&p_data);
         ABT_sched_get_num_pools(sched, &num_pools);
@@ -274,11 +551,30 @@ static void sched_run(ABT_sched sched)
         {
                 /* Execute one work unit from the scheduler's pool */
                 ABT_thread thread;
-                int rank;
-                ABT_xstream_self_rank(&rank);
-                ABT_pool_pop_thread_ex(pools[rank], &thread, ABT_POOL_CONTEXT_OWNER_PRIMARY);
+                ABT_pool_pop_thread_ex(pools[0], &thread, ABT_POOL_CONTEXT_OWNER_PRIMARY);
                 if (thread != ABT_THREAD_NULL)
+                {
+                        /* "thread" is associated with its original pool (pools[0]). */
                         ABT_self_schedule(thread, ABT_POOL_NULL);
+                }
+
+                // If thread == ABT_THREAD_NULL, then the main pool must have requested
+                // another pool for a steal. Now we need to wait for the other pool to serve
+                // the request and eventually, we would have a task after it has served our request.
+
+                // else if (num_pools > 1)
+                // {
+                //         /* Steal a work unit from other pools */
+                //         target =
+                //             (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools - 1) + 1);
+                //         ABT_pool_pop_thread_ex(pools[target], &thread, ABT_POOL_CONTEXT_OWNER_SECONDARY);
+                //         if (thread != ABT_THREAD_NULL)
+                //         {
+                //                 /* "thread" is associated with its original pool
+                //                  * (pools[target]). */
+                //                 ABT_self_schedule(thread, pools[target]);
+                //         }
+                // }
 
                 if (++work_count >= p_data->event_freq)
                 {
@@ -335,206 +631,4 @@ static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds)
         free(my_pools);
 
         ABT_sched_config_free(&config);
-}
-
-//==================================================== Argolib APIs ===================================================================
-/*
- * Prints the statistics
- */
-static void _print_stats()
-{
-        printf("=================== STATISTICS =======================\n");
-        for (int i = 0; i < num_xstreams; i++)
-        {
-                printf("Pool %d\n", i);
-                printf("\tPush Head: %d\tPush Tail: %d\n", pool_head_push[i], pool_tail_push[i]);
-                printf("\tPop Head: %d\tPop Tail: %d\n", pool_head_pop[i], pool_tail_pop[i]);
-                printf("\tNumber of stolen tasks: %d\n", pool_stole[i]);
-                printf("\tNumber of tasks donated: %d\n", pool_stolen_from[i]);
-        }
-        printf("=====================================================\n");
-}
-
-/*
- * Initializes the argobots runtime, the schedulers and the pools.
- */
-void argolib_core_init(int argc, char **argv)
-{
-        char *workers = getenv("ARGOLIB_WORKERS");
-        char *randomws = getenv("ARGOLIB_RANDOMWS");
-
-        // Get the number of execution streams to spawn from the environment
-        num_xstreams = workers ? atoi(workers) : 1;
-        if (num_xstreams <= 0)
-                num_xstreams = 1;
-        bool is_randws = randomws ? (atoi(randomws) > 0 ? 1 : 0) : 0;
-
-        // Allocate memory for statistics
-        pool_head_push = (int *)calloc(num_xstreams, sizeof(int));
-        pool_head_pop = (int *)calloc(num_xstreams, sizeof(int));
-        pool_tail_push = (int *)calloc(num_xstreams, sizeof(int));
-        pool_tail_pop = (int *)calloc(num_xstreams, sizeof(int));
-        pool_stolen_from = (int *)calloc(num_xstreams, sizeof(int));
-        pool_stole = (int *)calloc(num_xstreams, sizeof(int));
-        if (!pool_head_push || !pool_head_pop || !pool_tail_push || !pool_tail_pop || !pool_stolen_from || !pool_stole)
-        {
-                fprintf(stderr, "[ERORR] Could not allocate memory for statistics. Exiting...\n");
-                exit(-1);
-        }
-
-        // Allocate memory for argobots objects
-        xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * num_xstreams);
-        pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
-        scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
-        mailBox = (unit_t **)malloc(sizeof(unit_t *) * num_xstreams);
-        sharedCounter = (int *)calloc(num_xstreams, sizeof(int));
-        requestBox = (int *)calloc(num_xstreams, sizeof(int));
-        cond_vars = (pthread_cond_t *)calloc(num_xstreams, sizeof(pthread_cond_t));
-        cond_mutexes = (pthread_mutex_t *)calloc(num_xstreams, sizeof(pthread_mutex_t));
-        if (!xstreams || !pools || !scheds || !mailBox || !sharedCounter || !requestBox || !cond_vars || !cond_mutexes)
-        {
-                fprintf(stderr, "[ERORR] Could not allocate memory for argobots objects. Exiting...\n");
-                exit(-1);
-        }
-
-        // Initialize mailBoxes, requestBoxes and conditional variables
-        for (int i = 0; i < num_xstreams; i++)
-        {
-                requestBox[i] = -1; // Initialize Request Box IDs with -1
-                mailBox[i] = NULL;
-                if (pthread_cond_init(&cond_vars[i], NULL) != 0)
-                {
-                        fprintf(stderr, "[ERORR] Could not initialize conditional variable. Exiting...\n");
-                        exit(-1);
-                }
-                if (pthread_mutex_init(&cond_mutexes[i], NULL) != 0)
-                {
-                        fprintf(stderr, "[ERORR] Could not initialize mutex. Exiting...\n");
-                        exit(-1);
-                }
-        }
-
-        ABT_init(argc, argv);
-
-        // Set the first xstream handle to the current xstream
-        ABT_xstream_self(&xstreams[0]);
-
-        // Create pools
-        if (is_randws)
-                create_pools(num_xstreams, pools); // Create custom pools
-        else                                       // Create default pools
-                for (int i = 0; i < num_xstreams; i++)
-                        ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &pools[i]);
-
-        // Create schedulers
-        if (is_randws)
-                create_scheds(num_xstreams, pools, scheds); // Create custom schedulers
-        else
-        {
-                for (int i = 0; i < num_xstreams; i++)
-                {
-                        ABT_pool *tmp = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
-
-                        // tmp[0] is the main pool and the rest are the pools from which tasks can be stolen from
-                        for (int j = 0; j < num_xstreams; j++)
-                                tmp[j] = pools[(i + j) % num_xstreams];
-
-                        ABT_sched_create_basic(ABT_SCHED_DEFAULT, num_xstreams, tmp, ABT_SCHED_CONFIG_NULL, &scheds[i]);
-                        free(tmp);
-                }
-        }
-
-        // Set the scheduler for the primary execution stream
-        ABT_xstream_set_main_sched(xstreams[0], scheds[0]);
-
-        // Create secondary execution streams and assign schedulers to them
-        for (int i = 1; i < num_xstreams; i++)
-                ABT_xstream_create(scheds[i], &xstreams[i]);
-}
-
-/*
- * Finalizes the argobots runtime and frees variables
- */
-void argolib_core_finalize()
-{
-        // Wait for all execution streams to finish
-        // Free execution streams after they are finished
-        for (int i = 1; i < num_xstreams; i++)
-        {
-                ABT_xstream_join(xstreams[i]);
-                ABT_xstream_free(&xstreams[i]);
-        }
-
-        // Freeing all the schedulers
-        for (int i = 1; i < num_xstreams; i++)
-                ABT_sched_free(&scheds[i]);
-
-        // Destroy conditional variables
-        for (int i = 1; i < num_xstreams; i++)
-        {
-                pthread_mutex_destroy(&cond_mutexes[i]);
-                pthread_cond_destroy(&cond_vars[i]);
-        }
-
-        // Finalize argobots
-        ABT_finalize();
-
-        // Free allocated memory
-        free(xstreams);
-        free(pools);
-        free(scheds);
-        free(mailBox);
-        free(requestBox);
-        free(sharedCounter);
-        free(cond_vars);
-        free(cond_mutexes);
-        free(pool_head_push);
-        free(pool_head_pop);
-        free(pool_tail_push);
-        free(pool_tail_pop);
-        free(pool_stolen_from);
-        free(pool_stole);
-}
-
-/*
- * Forks a new task to run fptr with args
- */
-Task_handle *argolib_core_fork(fork_t fptr, void *args)
-{
-        Task_handle *thread_pointer = (Task_handle *)malloc(sizeof(Task_handle));
-        int rank;
-        ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
-        ABT_pool target_pool = pools[rank];
-        ABT_thread_create(target_pool, fptr, args, ABT_THREAD_ATTR_NULL, thread_pointer); // Create a new thread and push it into the current pool
-        return thread_pointer;
-}
-
-/*
- * Waits for all the Task_handles to finish
- */
-void argolib_core_join(Task_handle **list, int size)
-{
-        // First join all the threads
-        for (int i = 0; i < size; i++)
-                ABT_thread_join((*list[i]));
-
-        // Free all the threads
-        for (int i = 0; i < size; i++)
-                ABT_thread_free(list[i]);
-
-        // Free all the thread pointers allocated in fork
-        for (int i = 0; i < size; i++)
-                free(list[i]);
-}
-
-/*
- * Executes a computation kernel
- */
-void argolib_core_kernel(fork_t fptr, void *args)
-{
-        double timeStart = ABT_get_wtime(); // Gives current time
-        fptr(args);
-        double timeEnd = ABT_get_wtime();
-        printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0);
-        _print_stats();
 }
