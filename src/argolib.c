@@ -103,9 +103,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                                 requestSent = __atomic_compare_exchange_n(&requestBox[target], &expected, rank, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
                                                 if (requestSent)
                                                 {
-                                                        printf("Request sent from Thief %d to Victim %d\n", rank, target);
-
-                                                        // pool_stole[rank]++;
+                                                        pool_stole[rank]++;
 
                                                         // Wait for a task
                                                         pthread_mutex_lock(&cond_mutexes[rank]);
@@ -158,10 +156,8 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
 
         // Fullfill requests
         int requesterRank = __atomic_load_n(&requestBox[rank], __ATOMIC_SEQ_CST);
-        // printf("Requester Rank: %d\tTarget Rank: %d\t%p\n", requesterRank, rank, (void *)p_pool->p_tail);
         if (requesterRank != -1 && p_pool->p_tail) // If there is a request and a task available
         {
-                printf("Serving Request from Thief %d by Victim %d\n", requesterRank, rank);
                 // Pop from the tail and try to assign the task to the requester
                 p_unit = p_pool->p_tail;
                 p_pool->p_tail = p_unit->p_next;
@@ -184,10 +180,9 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
                 p_unit->p_prev = p_pool->p_head;
                 p_pool->p_head->p_next = p_unit;
         }
-        else
-        {
+        else // If pool is empty 
                 p_pool->p_tail = p_unit;
-        }
+        
         p_pool->p_head = p_unit;
         pool_head_push[rank]++;
 
