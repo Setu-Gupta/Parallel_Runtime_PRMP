@@ -10,6 +10,7 @@
 
 #include <initializer_list>
 #include <functional>
+#include <type_traits>
 
 extern "C"      // Import C style functions 
 {
@@ -18,7 +19,7 @@ extern "C"      // Import C style functions
 
 template<typename T>
 void lambda_wrapper(void *arg) {
-    T lambda = static_cast<T>(arg);
+    T* lambda = static_cast<T*>(arg);
     (*lambda)();
     delete lambda;
 }
