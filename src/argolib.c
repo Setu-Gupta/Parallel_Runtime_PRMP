@@ -38,6 +38,7 @@ bool *requestSent;
 bool *requestServed;
 
 pthread_mutex_t pplock;
+int *pool_task; // Task created per pool
 int net_push = 0;
 int net_pop = 0;
 
@@ -55,6 +56,11 @@ int *mailBox_task;
 void print_stats()
 {
 
+        int total_task_created = 0;
+        for(int i = 0; i < num_xstreams; i++){
+                total_task_created += pool_task[i];
+        }
+
         for (int i = 0; i < num_xstreams; i++)
         {
                 printf("Pool %d\n", i);
@@ -67,6 +73,7 @@ void print_stats()
         printf("\n");
         printf("Net pushes: %d\n", net_push);
         printf("Net pops: %d\n", net_pop);
+        printf("Total Tasks Created: %d\n", total_task_created);
 }
 
 void print_shared_counter(){
@@ -95,6 +102,8 @@ void argolib_core_init(int argc, char **argv)
         pool_tail_pop = (int *)calloc(num_xstreams, sizeof(int));
         pool_stolen_from = (int *)calloc(num_xstreams, sizeof(int));
         pool_stole_from = (int *)calloc(num_xstreams, sizeof(int));
+
+        pool_task = (int *)calloc(num_xstreams, sizeof(int));
 
         mailBox_task = (int *)calloc(num_xstreams, sizeof(int));
 
@@ -193,6 +202,8 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         ABT_thread_create(target_pool, fptr, args,
                           ABT_THREAD_ATTR_NULL, thread_pointer);
 
+        pool_task[rank]++;
+
         return thread_pointer;
 }
 
@@ -258,6 +269,8 @@ void argolib_core_finalize()
         free(mailBox);
         free(requestBox);
         free(sharedCounter);
+        free(requestSent);
+        free(requestServed);
 
         free(pool_head_push);
         free(pool_head_pop);
@@ -310,7 +323,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         isValidRequest = requestBox[rank] != -1;
         if (isValidRequest)
         {
-                printf("Valid Request\n");
+                // printf("Valid Request\n");
                 requesterRank = requestBox[rank];
                 // There is a request in the Request Box
 
@@ -335,7 +348,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                 // First Check the Mailbox for a task
                 if (mailBox[rank] != NULL)
                 {
-                        printf("MailBox Non-Empty at %d\n", rank);
+                        // printf("MailBox Non-Empty at %d\n", rank);
                         // Take Mutex on Mailbox as it can be Written by the Victim as well
                         // pthread_mutex_lock(&p_pool->lock);
                         // {
@@ -363,11 +376,11 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                         // Take lock on Request Box as it is read by the Victim as well
                                         pthread_mutex_lock(&pplock);
                                         // Put a Steal Request in the Request Box
-                                        printf("Current Request box value seen by Worker %d for Target %d is %d\n", rank, target, requestBox[target]);
+                                        // printf("Current Request box value seen by Worker %d for Target %d is %d\n", rank, target, requestBox[target]);
                                         requestBox[target] = rank;      //Critical Section as multiple workers may be able to put request
                                         pthread_mutex_unlock(&pplock);
 
-                                        printf("Request Sent by Worker %d to Worker %d\n", rank, target);
+                                        // printf("Request Sent by Worker %d to Worker %d\n", rank, target);
                                         requestSent[rank] = true;
                                         break;
                                 }
