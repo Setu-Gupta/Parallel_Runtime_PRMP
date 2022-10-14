@@ -15,6 +15,14 @@ extern "C"      // Import C style functions
         #include "./../src/include/argolib_core.h"
 }
 
+template<typename T>
+void lambda_wrapper(void *arg) {
+    T lambda = static_cast<T>(arg);
+    (*lambda)();
+    delete lambda;
+}
+
+/*
 using FunctionCallback = std::function<void(void)>;
 namespace CLambdaWorkaround
 {
@@ -48,12 +56,12 @@ namespace CLambdaWorkaround
                 return argolib_core_fork(&lambda_adapter, NULL);
         }   
 }
-
+*/
 namespace argolib
 {
          // Initializes the ArgoLib runtime.
          // It should be the first thing to call in the user main.
-         // Arguments “argc” and “argv” are the ones passed in the call to user main method.
+         // Arguments argc and argv are the ones passed in the call to user main method.
         void init(int argc, char **argv)
         {
                 argolib_core_init(argc, argv);
@@ -69,14 +77,18 @@ namespace argolib
         template <typename T>
         void kernel(T &&lambda)
         {
-                CLambdaWorkaround::lambda_kernel_wrapper(lambda);			
+                typedef typename std::remove_reference<T>::type U;
+                return argolib_core_kernel(lambda_wrapper<U>, new U(lambda));
+                //CLambdaWorkaround::lambda_kernel_wrapper(lambda);			
         }
 
         // Creates a new ULT to run lambda and returns the task handle to the ULT
         template <typename T>
         Task_handle* fork(T &&lambda)
         {
-                return CLambdaWorkaround::lambda_fork_wrapper(lambda);			
+                typedef typename std::remove_reference<T>::type U;
+                return argolib_core_fork(lambda_wrapper<U>, new U(lambda));
+                //return CLambdaWorkaround::lambda_fork_wrapper(lambda);			
         }
 
         // Called by join to join multiple tasks
