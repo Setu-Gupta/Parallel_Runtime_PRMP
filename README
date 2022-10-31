@@ -3,6 +3,8 @@ The sources from where the code was borrowed (if applicable) can be found in SOU
 The description of each directory and the files in them can be found in FILE_STRUCT.
 
 How to build:
+        1. Export the path to argobots installation
+                $ export ARGOBOTS_INSTALL_DIR=/absolute/path/to/argobots/installation/directory
         1. Run make with the target as help to see what all build options are availabe
                 $ make help
         2. Run make with appropriate build options

@@ -7,7 +7,7 @@ LDFLAGS	= -largolib -labt
 # Set the optimization level for the release build
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
-DBGFLAGS = -Og -g3 -ggdb -fsanitize=address
+DBGFLAGS = -Og -g3 -ggdb -fsanitize=thread
 # Set up the include path
 INCPATH = $(ARGOLIB_INSTALL_DIR)/include $(ARGOBOTS_INSTALL_DIR)/include
 # Set up argolib library path for debug build
