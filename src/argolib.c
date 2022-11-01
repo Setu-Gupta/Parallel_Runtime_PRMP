@@ -1,4 +1,5 @@
 #include <argolib_core.h>
+#include <limits.h>
 
 // Global variables
 ABT_xstream *xstreams;
@@ -53,6 +54,33 @@ int *pool_stole_from;
 
 int *mailBox_task;
 
+bool trace_enabled = false;     // Tracks whether trace replay is enabled or not
+bool trace_collected = false;   // Tracks whether trace has been collected or not
+
+// Metadata associated with every task
+typedef struct task task_t;
+struct task
+{
+        unsigned int task_ID = 0;
+        unsigned int creator_ID = UINT_MAX;
+        unsigned int executer_ID = UINT_MAX;
+        unsigned int steal_counter = UINT_MAX
+        task_t* next = NULL;
+        // TODO: Figure out what to put here for the thread
+};
+
+// Metadata associated with each worker
+typedef struct trace_worker
+{
+        unsigned int async_counter = 0;
+        unsigned int steal_counter = 0;
+        task_t* task_list_head = NULL;
+        task_t* task_list_tail = NULL;
+        task_t* stolen_tasks = NULL:
+} trace_worker_t;
+
+trace_worker_t* workers;        // The list of workers
+
 void print_stats()
 {
 
@@ -85,6 +113,84 @@ void print_shared_counter(){
         printf("\n");
 }
 
+void argolib_core_start_tracing()
+{
+        if(trace_enabled)
+                return;
+
+        trace_enabled = true;
+        trace_collected = false;
+        
+        workers = (trace_worker_t*)calloc(num_xstreams, sizeof(trace_worker_t));
+
+        // Clear out any worker metadata and set the starting state 
+        const unsigned int async_counter_chunk = UINT_MAX / num_xstreams;
+        for(int i = 0; i < num_xstreams; i++)
+        {
+                // Initialize workers for trace replay
+                workers[i].async_counter = i * async_counter_chunk;
+                workers[i].steal_counter = 0;
+                workers[i].task_list_head = NULL;
+                workers[i].task_list_tail = NULL;
+        }
+}
+
+void aggregate_tasks_lists()
+{
+        // TODO
+}
+
+void sort_tasks_lists()
+{
+        // TODO
+}
+
+void allocate_space_for_stolen_tasks()
+{
+        // TODO
+}
+
+void argolib_core_stop_tracing()
+{
+        if(!trace_collected)
+        {
+                aggregate_tasks_lists();
+                sort_tasks_lists();
+                allocate_space_for_stolen_tasks();
+                trace_collected = true;
+        }
+}
+
+void argolib_destroy_worker(trace_worker_t w)
+{
+        // Free the memory allocated for stolen task array
+        free(w.stolen_tasks);
+
+        // Delete the task list
+        task_t* t = w.task_list_head;
+        while(t)
+        {
+                task_t* temp = t;
+                t = t->next;
+                free(temp);
+        }
+}
+
+void argolib_send_to_theif(task_t* task)
+{
+        // TODO
+}
+
+task_t* argolib_wait_for_stolen_task(trace_worker* w)
+{
+        // TODO
+}
+
+void argolib_record_stolen_task(trace_worker* stealer, trace_worker *victim, task_t* stolen_task)
+{
+        // TODO
+}
+
 void argolib_core_init(int argc, char **argv)
 {
         char *workers = getenv("ARGOLIB_WORKERS");
@@ -102,9 +208,7 @@ void argolib_core_init(int argc, char **argv)
         pool_tail_pop = (int *)calloc(num_xstreams, sizeof(int));
         pool_stolen_from = (int *)calloc(num_xstreams, sizeof(int));
         pool_stole_from = (int *)calloc(num_xstreams, sizeof(int));
-
         pool_task = (int *)calloc(num_xstreams, sizeof(int));
-
         mailBox_task = (int *)calloc(num_xstreams, sizeof(int));
 
         // Minimum size Execution Streams and Threads when taken from user
@@ -191,7 +295,11 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
          * thread_pointer will be returned to the caller hence defined static.
          * Preferably, the caller should pass a thread_arg_t pointer
          */
+        
         Task_handle *thread_pointer = (Task_handle *)malloc(sizeof(Task_handle));
+       
+        // Create a task
+        // TODO: Figure out what to put in a task
 
         int rank;
         ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
@@ -251,6 +359,7 @@ void argolib_core_finalize()
         {
                 ABT_xstream_join(xstreams[i]);
                 ABT_xstream_free(&xstreams[i]);
+                argolib_destroy_worker(workers[i]);
         }
 
         // Freeing all the schedulers
@@ -258,6 +367,7 @@ void argolib_core_finalize()
         {
                 ABT_sched_free(&scheds[i]);
         }
+
         // Finalize argobots
         ABT_finalize();
 
@@ -278,6 +388,8 @@ void argolib_core_finalize()
         free(pool_tail_pop);
         free(pool_stolen_from);
         free(pool_stole_from);
+
+        free(workers);
 }
 
 // Custom Work Stealing
