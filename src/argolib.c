@@ -48,7 +48,7 @@ bool *requestSent;
 bool *requestServed;
 
 pthread_mutex_t pplock;
-int *pool_task; // Task created per pool
+int *pool_task;         // Number of tasks created per pool
 int net_push = 0;
 int net_pop = 0;
 
@@ -66,18 +66,6 @@ int *mailBox_task;
 bool trace_enabled = false;     // Tracks whether trace replay is enabled or not
 bool trace_collected = false;   // Tracks whether trace has been collected or not
 
-// Metadata associated with every task
-// typedef struct task task_t;
-// struct task
-// {
-//         unsigned int task_ID;
-//         unsigned int creator_ID;
-//         unsigned int executer_ID;
-//         unsigned int steal_counter;
-//         task_t* next;
-//         // TODO: Figure out what to put here for the thread
-// };
-
 // Metadata associated with each worker
 typedef struct trace_worker
 {
@@ -85,7 +73,6 @@ typedef struct trace_worker
         unsigned int steal_counter;
         unit_t* task_list_head;
         unit_t* task_list_tail;
-        unit_t* stolen_tasks;
 } trace_worker_t;
 
 // Push happens on the Head
@@ -182,35 +169,150 @@ void argolib_core_start_tracing()
 
 void aggregate_tasks_lists()
 {
-        // TODO
+        unit_t** aggregated_list_heads = (unit_t**)malloc(num_xstreams * sizeof(unit_t*));
+        unit_t** aggregated_list_tails = (unit_t**)malloc(num_xstreams * sizeof(unit_t*));
+        
+        for(int i = 0; i < num_xstreams; i++)
+        {
+                aggregated_list_heads[i] = NULL;
+                aggregated_list_tails[i] = NULL;
+        }
+        
+        // Go over the list of each worker and aggregate the tasks into aggregated_list
+        for(int i = 0; i < num_xstreams; i++)
+        {
+                unit_t* ptr = workers[i].task_list_head;
+                while(ptr != NULL)
+                {
+                        unsigned int Wc = ptr->creator_ID;
+                        if(aggregated_list_heads[Wc] == NULL)
+                        {
+                                aggregated_list_heads[Wc] = ptr;
+                                ptr->trace_worker_list_prev = NULL;
+                                ptr->trace_worker_list_next = NULL;
+                        }
+                        else
+                        {
+                                ptr->trace_worker_list_next = aggregated_list_heads[Wc];
+                                aggregated_list_heads[Wc]->trace_worker_list_prev = ptr;
+                                ptr->trace_worker_list_prev = NULL;
+                        }
+                        ptr = ptr->trace_worker_list_next;
+                }
+        }
+        
+        // Set the tails
+        for(int i = 0; i < num_xstreams; i++)
+        {
+                unit_t* ptr = aggregated_list_heads[i];
+                while(ptr->trace_worker_list_next != NULL) ptr = ptr->trace_worker_list_next;
+                aggregated_list_tails[i] = ptr;
+        }
+        
+        // Update the lists in workers
+        for(int i = 0; i < num_xstreams; i++)
+        {
+                workers[i].task_list_head = aggregated_list_heads[i];
+                workers[i].task_list_tail = aggregated_list_tails[i];
+        }
+
+        free(aggregated_list_heads);
+        free(aggregated_list_tails);
+}
+
+void sort(unit_t** arr, unsigned int length)
+{
+        // Use bubble sort to sort based on task_ID
+        for(int i = 0; i < (int)length; i++)
+        {
+                for(int j = 0; j < (int)length - i - 1; j++)
+                {
+                        if(arr[j]->task_ID > arr[j+1]->task_ID)
+                        {
+                                unit_t* temp = arr[j];
+                                arr[j] = arr[j+1];
+                                arr[j+1] = temp;
+                        }
+                }
+        }
 }
 
 void sort_tasks_lists()
 {
-        // TODO
-}
+        for(int i = 0; i < num_xstreams; i++)
+        {
+                unit_t* ptr = workers[i].task_list_head;
+                unsigned int count = 0;
+                while(ptr != NULL)
+                {
+                        count++;
+                        ptr = ptr->trace_worker_list_next;
+                }
+                
+                // Allocate an array for sorting the list of unit_ts
+                unit_t** arr = (unit_t**)malloc(count * sizeof(unit_t*));
+                
+                // Move all tasks to the array
+                ptr = workers[i].task_list_head;
+                int idx = 0;
+                while(ptr != NULL)
+                {
+                        arr[idx++] = ptr;
+                        ptr = ptr->trace_worker_list_next;
+                }
 
-void allocate_space_for_stolen_tasks()
-{
-        // TODO
+                // Sort the array
+                sort(arr, count);
+
+                // Move all tasks back to a linked list
+                workers[i].task_list_head = arr[0];
+                workers[i].task_list_tail = arr[0];
+                for(int i = 1; i < (int)count; i++)
+                {
+                        // Insert at tail
+                        arr[i]->trace_worker_list_next = NULL;
+                        workers[i].task_list_tail->trace_worker_list_next = arr[i];
+                        arr[i]->trace_worker_list_prev = workers[i].task_list_tail;
+                        workers[i].task_list_tail = arr[i];
+                }
+                free(arr);
+        }
 }
 
 void argolib_core_stop_tracing()
 {
+        printf("Called");
         if(!trace_collected)
         {
+                // Aggregate and sort the lists
                 aggregate_tasks_lists();
                 sort_tasks_lists();
-                allocate_space_for_stolen_tasks();
+                for(int i = 0; i < num_xstreams; i++)
+                {
+                        unit_t* ptr = workers[i].task_list_head;
+                        while(ptr != NULL)
+                        {
+                                printf("%d ", ptr->task_ID);
+                                ptr = ptr->trace_worker_list_next;
+                        }
+                        printf("\n");
+                }
+
+                // Reset async and steal counters
+                const unsigned int async_counter_chunk = UINT_MAX / num_xstreams;
+                for(int i = 0; i < num_xstreams; i++)
+                {
+                        // Reset workers for replay
+                        workers[i].async_counter = i * async_counter_chunk;
+                        workers[i].steal_counter = 0;
+                }
+                
                 trace_collected = true;
         }
 }
 
 void argolib_destroy_worker(trace_worker_t w)
 {
-        // Free the memory allocated for stolen task array
-        free(w.stolen_tasks);
-
         // Delete the task list
         unit_t* t = w.task_list_head;
         while(t)
@@ -219,22 +321,6 @@ void argolib_destroy_worker(trace_worker_t w)
                 t = t->trace_worker_list_next;
                 free(temp);
         }
-}
-
-void argolib_send_to_theif(unit_t* task)
-{
-        // TODO
-}
-
-unit_t* argolib_wait_for_stolen_task(trace_worker_t* w)
-{
-        // TODO
-        return NULL;
-}
-
-void argolib_record_stolen_task(trace_worker_t* stealer, trace_worker_t *victim, unit_t* stolen_task)
-{
-        // TODO
 }
 
 void argolib_core_init(int argc, char **argv)
@@ -346,15 +432,27 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         
         Task_handle *thread_pointer = (Task_handle *)malloc(sizeof(Task_handle));
        
-        // Create a task
-        // TODO: Figure out what to put in a task
-
         int rank;
         ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
-        ABT_pool target_pool = pools[rank];
+        
+        ABT_pool target_pool;
+        workers[rank].async_counter++;
+        if(trace_collected && workers[rank].task_list_head->task_ID == workers[rank].async_counter)
+        {
+                int theif_rank = workers[rank].task_list_head->executor_ID;
+                target_pool = pools[theif_rank];
+
+                // Remove one node from the list
+                unit_t* temp = workers[rank].task_list_head;
+                workers[rank].task_list_head = workers[rank].task_list_head->trace_worker_list_next;
+                free(temp);
+        }
+        else
+                target_pool = pools[rank];
         // printf("Forked from ES %d\n", rank);
         //  When should we use ABT_thread_create_to ?
         //  This internally pushes the thread into the pool
+
         ABT_thread_create(target_pool, fptr, args,
                           ABT_THREAD_ATTR_NULL, thread_pointer);
 
@@ -407,7 +505,7 @@ void argolib_core_finalize()
         {
                 ABT_xstream_join(xstreams[i]);
                 ABT_xstream_free(&xstreams[i]);
-                // argolib_destroy_worker(workers[i]);
+                argolib_destroy_worker(workers[i]);
         }
 
         // Freeing all the schedulers
@@ -453,9 +551,7 @@ static ABT_unit pool_create_unit(ABT_pool pool, ABT_thread thread)
 
 static void pool_free_unit(ABT_pool pool, ABT_unit unit)
 {
-        // TODO: Do free in Finalize to preserve metadata for Trance and replay
-        // unit_t *p_unit = (unit_t *)unit;
-        // free(p_unit->thread);
+        // Do not do anythig as unit will be used for tracking tasks
 }
 
 static ABT_bool pool_is_empty(ABT_pool pool)
@@ -479,116 +575,130 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         bool isValidRequest = false;
         int requesterRank;
 
-        // Always First check if there is a request in the Request Box
-        pthread_mutex_lock(&p_pool->lock);
-        isValidRequest = requestBox[rank] != -1;
-        if (isValidRequest)
+        if(trace_collected)
         {
-                // printf("Valid Request\n");
-                requesterRank = requestBox[rank];
-                // There is a request in the Request Box
-
-                // Pop from the Tail
-                p_unit = p_pool->p_tail;
-                p_pool->p_tail = p_unit->p_next;
-                pool_tail_pop[rank]++;
-                pool_stolen_from[rank]++;
-
-                sharedCounter[rank]--;  //Decrement shared counter due to pop from tail
-                mailBox[requesterRank] = p_unit;        // Put the popped thread on the requesters Mailbox
-                requestBox[rank] = -1;   // Clear The request
-
-                requestServed[requesterRank] = true;
+                // Wait till pool is empty
+                int is_empty = 1;
+                while(is_empty) ABT_pool_is_empty(pool, &is_empty);
+                
+                pthread_mutex_lock(&p_pool->lock);
+                p_unit = p_pool->p_head;
+                p_pool->p_head = p_unit->p_prev;
+                pthread_mutex_unlock(&p_pool->lock);
         }
-        // pthread_mutex_unlock(&p_pool->lock);
-
-        // pthread_mutex_lock(&p_pool->lock);
-        if (p_pool->p_head == NULL)
+        else
         {
-                /* Empty. */
-                // First Check the Mailbox for a task
-                if (mailBox[rank] != NULL)
+                // Always First check if there is a request in the Request Box
+                pthread_mutex_lock(&p_pool->lock);
+                isValidRequest = requestBox[rank] != -1;
+                if (isValidRequest)
                 {
-                        // printf("MailBox Non-Empty at %d\n", rank);
-                        // Take Mutex on Mailbox as it can be Written by the Victim as well
-                        // pthread_mutex_lock(&p_pool->lock);
-                        // {
-                                // There is a task in Mailbox; pop it
-                                
-                                // This is the only place where steals happen!
-                                p_unit = mailBox[rank]; // Variable that returns the thread
-                                mailBox[rank] = NULL;   // Empty the Mailbox
-                                mailBox_task[rank]++;
+                        // printf("Valid Request\n");
+                        requesterRank = requestBox[rank];
+                        // There is a request in the Request Box
 
-                                p_unit->executor_ID = rank;
-                                // First Assign the steal count of the worker to the task
-                                p_unit->steal_counter = workers[rank].steal_counter;
-                                // Then Increment the steal count of the worker
-                                workers[rank].steal_counter++;
+                        // Pop from the Tail
+                        p_unit = p_pool->p_tail;
+                        p_pool->p_tail = p_unit->p_next;
+                        pool_tail_pop[rank]++;
+                        pool_stolen_from[rank]++;
 
-                                // This stolen Node is pushed in the private linked list of the worker.
-                                pushTraceWorker(&workers[rank], p_unit);
+                        sharedCounter[rank]--;  //Decrement shared counter due to pop from tail
+                        mailBox[requesterRank] = p_unit;        // Put the popped thread on the requesters Mailbox
+                        requestBox[rank] = -1;   // Clear The request
 
-                        // }
-                        // pthread_mutex_unlock(&p_pool->lock);
+                        requestServed[requesterRank] = true;
                 }
-                else if(!requestSent[rank])
+                pthread_mutex_unlock(&p_pool->lock);
+
+                // pthread_mutex_lock(&p_pool->lock);
+                if (p_pool->p_head == NULL)
                 {
-                        for(int i = (rank + 1) % num_xstreams; i != rank; i = (i + 1) % num_xstreams)
+                        /* Empty. */
+                        // First Check the Mailbox for a task
+                        if (mailBox[rank] != NULL)
                         {
-                                // Both Deque and Mailbox are empty
-                                // Send request to a Worker with non-empty deque
-                                target = i;
+                                // printf("MailBox Non-Empty at %d\n", rank);
+                                // Take Mutex on Mailbox as it can be Written by the Victim as well
+                                // pthread_mutex_lock(&p_pool->lock);
+                                // {
+                                        // There is a task in Mailbox; pop it
+                                        
+                                        // This is the only place where steals happen!
+                                        p_unit = mailBox[rank]; // Variable that returns the thread
+                                        mailBox[rank] = NULL;   // Empty the Mailbox
+                                        mailBox_task[rank]++;
 
-                                pthread_mutex_lock(&pplock);
-                                int targetRequestBox = requestBox[target];
-                                pthread_mutex_unlock(&pplock);
+                                        p_unit->executor_ID = rank;
+                                        // First Assign the steal count of the worker to the task
+                                        p_unit->steal_counter = workers[rank].steal_counter;
+                                        // Then Increment the steal count of the worker
+                                        workers[rank].steal_counter++;
 
-                                if (sharedCounter[target] >= 10 && targetRequestBox == -1)
+                                        // This stolen Node is pushed in the private linked list of the worker.
+                                        if(trace_enabled)
+                                                pushTraceWorker(&workers[rank], p_unit);
+
+                                // }
+                                // pthread_mutex_unlock(&p_pool->lock);
+                        }
+                        else if(!requestSent[rank])
+                        {
+                                for(int i = (rank + 1) % num_xstreams; i != rank; i = (i + 1) % num_xstreams)
                                 {
-                                        // Take lock on Request Box as it is read by the Victim as well
+                                        // Both Deque and Mailbox are empty
+                                        // Send request to a Worker with non-empty deque
+                                        target = i;
+
                                         pthread_mutex_lock(&pplock);
-                                        // Put a Steal Request in the Request Box
-                                        // printf("Current Request box value seen by Worker %d for Target %d is %d\n", rank, target, requestBox[target]);
-                                        requestBox[target] = rank;      //Critical Section as multiple workers may be able to put request
+                                        int targetRequestBox = requestBox[target];
                                         pthread_mutex_unlock(&pplock);
 
-                                        // printf("Request Sent by Worker %d to Worker %d\n", rank, target);
-                                        requestSent[rank] = true;
-                                        break;
-                                }
-                        } // TODO: Potential Deadlock if only 2 ES and Stealer is empty and the other worker has only 1 or 0 threads
-                } else if(requestServed[rank]){
-                        requestSent[rank] = false;
-                        requestServed[rank] = false;
+                                        if (sharedCounter[target] >= 10 && targetRequestBox == -1)
+                                        {
+                                                // Take lock on Request Box as it is read by the Victim as well
+                                                pthread_mutex_lock(&pplock);
+                                                // Put a Steal Request in the Request Box
+                                                // printf("Current Request box value seen by Worker %d for Target %d is %d\n", rank, target, requestBox[target]);
+                                                requestBox[target] = rank;      //Critical Section as multiple workers may be able to put request
+                                                pthread_mutex_unlock(&pplock);
+
+                                                // printf("Request Sent by Worker %d to Worker %d\n", rank, target);
+                                                requestSent[rank] = true;
+                                                break;
+                                        }
+                                } 
+                        } else if(requestServed[rank]){
+                                requestSent[rank] = false;
+                                requestServed[rank] = false;
+                        }
                 }
-        }
-        else if (p_pool->p_head == p_pool->p_tail)
-        {
-                { /* Only one thread. */
+                else if (p_pool->p_head == p_pool->p_tail)
+                {
+                        { /* Only one thread. */
+                                p_unit = p_pool->p_head;
+                                p_pool->p_head = NULL;
+                                p_pool->p_tail = NULL;
+                                p_unit->executor_ID = rank;
+                                pool_head_pop[rank]++;
+                                // pthread_mutex_lock(&p_pool->lock);
+                                sharedCounter[rank]--;
+                                // pthread_mutex_unlock(&p_pool->lock);
+                        }
+                }
+                else
+                {
+                        /* Pop from the head. */
                         p_unit = p_pool->p_head;
-                        p_pool->p_head = NULL;
-                        p_pool->p_tail = NULL;
+                        p_pool->p_head = p_unit->p_prev;
                         p_unit->executor_ID = rank;
                         pool_head_pop[rank]++;
                         // pthread_mutex_lock(&p_pool->lock);
                         sharedCounter[rank]--;
                         // pthread_mutex_unlock(&p_pool->lock);
                 }
+                pthread_mutex_unlock(&p_pool->lock);
         }
-        else
-        {
-                /* Pop from the head. */
-                p_unit = p_pool->p_head;
-                p_pool->p_head = p_unit->p_prev;
-                p_unit->executor_ID = rank;
-                pool_head_pop[rank]++;
-                // pthread_mutex_lock(&p_pool->lock);
-                sharedCounter[rank]--;
-                // pthread_mutex_unlock(&p_pool->lock);
-        }
-        pthread_mutex_unlock(&p_pool->lock);
-
         if (!p_unit)
                 return ABT_THREAD_NULL;
         // pthread_mutex_lock(&pplock);
