@@ -7,7 +7,7 @@ LDFLAGS	= -largolib -labt
 # Set the optimization level for the release build
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
-DBGFLAGS = -Og -g3 -ggdb -fsanitize=address
+DBGFLAGS = -O0 -Og -g3 -ggdb
 # Set up the include path
 INCPATH = $(ARGOLIB_INSTALL_DIR)/include $(ARGOBOTS_INSTALL_DIR)/include
 # Set up argolib library path for debug build
@@ -33,6 +33,13 @@ DEBUG_TARGETS = $(patsubst %.c,bin/debug/%,$(SRC))
 release: $(TARGETS)								# Set the default target as release for make
 .PHONY: debug
 debug: $(DEBUG_TARGETS)								# Set the debug target for make
+.PHONY: sanitize								# Create a new target which uses address sanitizer along with debug flags
+sanitize: DBGFLAGS += -fsanitize=address
+sanitize: debug_clean debug
+.PHONY: debug_clean
+debug_clean:
+	rm -rf $(DEBUG_TARGET)
+	rm -rf $(DEBUG_OBJECTS)
 
 $(TARGETS): $(OBJECTS)								# Specify how to compile TARGETS
 	$(CC) -L$(ARGOLIB) -L$(RELARGOLIB) $(OPTFLAGS) $^ -o $@ $(LDFLAGS)
@@ -52,6 +59,7 @@ help:
 	@echo "TARGET:"
 	@echo "	release		: Builds the binaries with all the optimizations enabled"
 	@echo "	debug		: Builds the binaries with debug information"
+	@echo "	sanitize	: Builds the library with debug information and address sanitizer"
 	@echo "	clean		: Removes all the files that were built"
 	@echo "	help		: Displays this message"
 
