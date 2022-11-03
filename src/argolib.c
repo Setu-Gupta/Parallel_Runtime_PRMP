@@ -599,7 +599,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
                         requestServed[requesterRank] = true;
                 }
-                pthread_mutex_unlock(&p_pool->lock);
+                // pthread_mutex_unlock(&p_pool->lock);
 
                 // pthread_mutex_lock(&p_pool->lock);
                 if (p_pool->p_head == NULL)
