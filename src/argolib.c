@@ -90,8 +90,8 @@ typedef struct trace_worker
 
 // Push happens on the Head
 void pushTraceWorker(trace_worker_t* trace_worker, unit_t* task){
-        printf("Steal:\n");
-        printf("\tTask ID: %d\tCreator ID: %d\tExecutor ID: %d\tSteal Counter: %d\n", task->task_ID, task->creator_ID, task->executor_ID, task->steal_counter);
+        // printf("Steal:\n");
+        // printf("\tTask ID: %d\tCreator ID: %d\tExecutor ID: %d\tSteal Counter: %d\n", task->task_ID, task->creator_ID, task->executor_ID, task->steal_counter);
         if(trace_worker->task_list_head == NULL || trace_worker->task_list_tail == NULL){
                 trace_worker->task_list_head = task;
                 trace_worker->task_list_tail = task;

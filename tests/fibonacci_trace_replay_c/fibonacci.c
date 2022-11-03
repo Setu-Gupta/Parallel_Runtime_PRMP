@@ -32,17 +32,26 @@ void fib(fibonacci_arg_t* fib_arg)
     free(y);
 }
 
+void compute_kernel(fibonacci_arg_t *arg, int *result)
+{
+        fib(arg);
+        *result += arg->ret;
+}
 
 int main(int argc, char **argv) {
     argolib_init(argc, argv);
-    int result;
+    int result = 0;
     fibonacci_arg_t* arg;
     arg = (fibonacci_arg_t*) malloc(sizeof(fibonacci_arg_t));
     arg->n = 27;
     arg->ret = 0;
-    argolib_kernel((fork_t)fib, (void*)arg);
-    result = arg->ret;
-    printf("Fib(27) = %d\n", result);
+    for(int i = 0; i < 10; i++)
+    {
+        argolib_start_tracing();
+        compute_kernel(arg, &result);
+        argolib_stop_tracing();
+    }
+    printf("10 * Fib(27) = %d\n", result);
     argolib_finalize();
     free(arg);
     return 0;
