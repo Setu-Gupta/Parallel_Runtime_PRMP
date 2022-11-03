@@ -12,7 +12,6 @@ LDFLAGS	= -labt -shared
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
 DBGFLAGS = -Og -g3 -ggdb 
-#-fsanitize=address 
 
 # Gather all the source files
 SRC = $(wildcard src/*.c)
@@ -33,6 +32,13 @@ DEBUG_TARGET = debug/lib/$(LIB)
 release: $(TARGET)								# Set the default target as release for make
 .PHONY: debug
 debug: $(DEBUG_TARGET)								# Set the debug target for make
+.PHONY: sanitize								# Create a new target which uses address sanitizer along with debug flags
+sanitize: DBGFLAGS += -fsanitize=address
+sanitize: debug_clean debug
+.PHONY: debug_clean
+debug_clean:
+	rm -rf $(DEBUG_TARGET)
+	rm -rf $(DEBUG_OBJECTS)
 
 $(TARGET): $(OBJECTS)								# Specify how to compile TARGET
 	$(CC) -L$(ARGOLIBPATH) $(CFLAGS) $(OPTFLAGS) -o $(TARGET) $(OBJECTS) $(LDFLAGS)
@@ -52,6 +58,7 @@ help:
 	@echo "TARGET:"
 	@echo "	release		: Builds the library with all the optimizations enabled"
 	@echo "	debug		: Builds the library with debug information"
+	@echo "	sanitize	: Builds the library with debug information and address sanitizer"
 	@echo "	clean		: Removes all the files that were built"
 	@echo "	help		: Displays this message"
 
