@@ -287,16 +287,6 @@ void argolib_core_stop_tracing()
                 // Aggregate and sort the lists
                 aggregate_tasks_lists();
                 sort_tasks_lists();
-                for(int i = 0; i < num_xstreams; i++)
-                {
-                        unit_t* ptr = workers[i].task_list_head;
-                        while(ptr != NULL)
-                        {
-                                printf("%d ", ptr->task_ID);
-                                ptr = ptr->trace_worker_list_next;
-                        }
-                        printf("\n");
-                }
 
                 // Reset async and steal counters
                 const unsigned int async_counter_chunk = UINT_MAX / num_xstreams;
