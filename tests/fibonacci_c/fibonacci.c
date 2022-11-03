@@ -40,7 +40,11 @@ int main(int argc, char **argv) {
     arg = (fibonacci_arg_t*) malloc(sizeof(fibonacci_arg_t));
     arg->n = 27;
     arg->ret = 0;
-    argolib_kernel((fork_t)fib, (void*)arg);
+    for(int i = 0; i < 10; i++){
+        argolib_start_tracing();
+        argolib_kernel((fork_t)fib, (void*)arg);
+        argolib_stop_tracing();
+    }
     result = arg->ret;
     printf("Fib(27) = %d\n", result);
     argolib_finalize();

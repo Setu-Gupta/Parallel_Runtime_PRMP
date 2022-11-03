@@ -12,6 +12,7 @@ LDFLAGS	= -labt -shared
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
 DBGFLAGS = -Og -g3 -ggdb 
+#-fsanitize=address 
 
 # Gather all the source files
 SRC = $(wildcard src/*.c)

@@ -18,6 +18,15 @@ typedef struct pool_t pool_t;
 
 struct unit_t
 {
+        // This is for Trace and Replay
+        unsigned int task_ID;
+        unsigned int creator_ID;
+        unsigned int executor_ID;
+        unsigned int steal_counter;
+
+        unit_t *trace_worker_list_next;       // For linked list of trace and replay
+        unit_t *trace_worker_list_prev;       // For linked list of trace and replay
+        
         unit_t *p_prev;
         unit_t *p_next;
         ABT_thread thread;
@@ -58,26 +67,64 @@ bool trace_enabled = false;     // Tracks whether trace replay is enabled or not
 bool trace_collected = false;   // Tracks whether trace has been collected or not
 
 // Metadata associated with every task
-typedef struct task task_t;
-struct task
-{
-        unsigned int task_ID = 0;
-        unsigned int creator_ID = UINT_MAX;
-        unsigned int executer_ID = UINT_MAX;
-        unsigned int steal_counter = UINT_MAX
-        task_t* next = NULL;
-        // TODO: Figure out what to put here for the thread
-};
+// typedef struct task task_t;
+// struct task
+// {
+//         unsigned int task_ID;
+//         unsigned int creator_ID;
+//         unsigned int executer_ID;
+//         unsigned int steal_counter;
+//         task_t* next;
+//         // TODO: Figure out what to put here for the thread
+// };
 
 // Metadata associated with each worker
 typedef struct trace_worker
 {
-        unsigned int async_counter = 0;
-        unsigned int steal_counter = 0;
-        task_t* task_list_head = NULL;
-        task_t* task_list_tail = NULL;
-        task_t* stolen_tasks = NULL:
+        unsigned int async_counter;
+        unsigned int steal_counter;
+        unit_t* task_list_head;
+        unit_t* task_list_tail;
+        unit_t* stolen_tasks;
 } trace_worker_t;
+
+// Push happens on the Head
+void pushTraceWorker(trace_worker_t* trace_worker, unit_t* task){
+        printf("Steal:\n");
+        printf("\tTask ID: %d\tCreator ID: %d\tExecutor ID: %d\tSteal Counter: %d\n", task->task_ID, task->creator_ID, task->executor_ID, task->steal_counter);
+        if(trace_worker->task_list_head == NULL || trace_worker->task_list_tail == NULL){
+                trace_worker->task_list_head = task;
+                trace_worker->task_list_tail = task;
+                task->trace_worker_list_next = NULL;
+                task->trace_worker_list_prev = NULL;
+        } else {
+                task->trace_worker_list_next = trace_worker->task_list_head;
+                trace_worker->task_list_head->trace_worker_list_prev = task;
+                trace_worker->task_list_head = task;
+        }
+        // printf("Push Completed\n");
+}
+
+// Pop Happens on the Tail
+unit_t* popTraceWorker(trace_worker_t* trace_worker){
+        unit_t* ret;
+        if(trace_worker->task_list_head == NULL || trace_worker->task_list_tail == NULL){
+                ret = NULL;
+        } else if(trace_worker->task_list_head == trace_worker->task_list_tail){
+                ret = trace_worker->task_list_head;
+                trace_worker->task_list_head = NULL;
+                trace_worker->task_list_tail = NULL;
+        } else{
+                ret = trace_worker->task_list_tail;
+
+                trace_worker->task_list_tail = ret->trace_worker_list_prev;
+                trace_worker->task_list_tail->trace_worker_list_next = NULL;
+
+                ret->trace_worker_list_next = NULL;
+                ret->trace_worker_list_prev = NULL;
+        }
+        return ret;
+}
 
 trace_worker_t* workers;        // The list of workers
 
@@ -120,8 +167,6 @@ void argolib_core_start_tracing()
 
         trace_enabled = true;
         trace_collected = false;
-        
-        workers = (trace_worker_t*)calloc(num_xstreams, sizeof(trace_worker_t));
 
         // Clear out any worker metadata and set the starting state 
         const unsigned int async_counter_chunk = UINT_MAX / num_xstreams;
@@ -167,36 +212,37 @@ void argolib_destroy_worker(trace_worker_t w)
         free(w.stolen_tasks);
 
         // Delete the task list
-        task_t* t = w.task_list_head;
+        unit_t* t = w.task_list_head;
         while(t)
         {
-                task_t* temp = t;
-                t = t->next;
+                unit_t* temp = t;
+                t = t->trace_worker_list_next;
                 free(temp);
         }
 }
 
-void argolib_send_to_theif(task_t* task)
+void argolib_send_to_theif(unit_t* task)
 {
         // TODO
 }
 
-task_t* argolib_wait_for_stolen_task(trace_worker* w)
+unit_t* argolib_wait_for_stolen_task(trace_worker_t* w)
 {
         // TODO
+        return NULL;
 }
 
-void argolib_record_stolen_task(trace_worker* stealer, trace_worker *victim, task_t* stolen_task)
+void argolib_record_stolen_task(trace_worker_t* stealer, trace_worker_t *victim, unit_t* stolen_task)
 {
         // TODO
 }
 
 void argolib_core_init(int argc, char **argv)
 {
-        char *workers = getenv("ARGOLIB_WORKERS");
+        char *num_workers = getenv("ARGOLIB_WORKERS");
         char *randomws = getenv("ARGOLIB_RANDOMWS");
 
-        num_xstreams = workers ? atoi(workers) : 1;
+        num_xstreams = num_workers ? atoi(num_workers) : 1;
         bool is_randws = randomws ? (atoi(randomws) > 0 ? 1 : 0) : 0;
 
         pthread_mutex_init(&pplock, 0);
@@ -224,6 +270,8 @@ void argolib_core_init(int argc, char **argv)
         requestBox = (int *)calloc(num_xstreams, sizeof(int));
         requestSent = (bool *)calloc(num_xstreams, sizeof(bool));
         requestServed = (bool *)calloc(num_xstreams, sizeof(bool));
+
+        workers = (trace_worker_t*)calloc(num_xstreams, sizeof(trace_worker_t));        //For Trace and Replay
 
         for (int i = 0; i < num_xstreams; i++)
         {
@@ -359,7 +407,7 @@ void argolib_core_finalize()
         {
                 ABT_xstream_join(xstreams[i]);
                 ABT_xstream_free(&xstreams[i]);
-                argolib_destroy_worker(workers[i]);
+                // argolib_destroy_worker(workers[i]);
         }
 
         // Freeing all the schedulers
@@ -405,8 +453,9 @@ static ABT_unit pool_create_unit(ABT_pool pool, ABT_thread thread)
 
 static void pool_free_unit(ABT_pool pool, ABT_unit unit)
 {
-        unit_t *p_unit = (unit_t *)unit;
-        free(p_unit);
+        // TODO: Do free in Finalize to preserve metadata for Trance and replay
+        // unit_t *p_unit = (unit_t *)unit;
+        // free(p_unit->thread);
 }
 
 static ABT_bool pool_is_empty(ABT_pool pool)
@@ -465,9 +514,21 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                         // pthread_mutex_lock(&p_pool->lock);
                         // {
                                 // There is a task in Mailbox; pop it
+                                
+                                // This is the only place where steals happen!
                                 p_unit = mailBox[rank]; // Variable that returns the thread
                                 mailBox[rank] = NULL;   // Empty the Mailbox
                                 mailBox_task[rank]++;
+
+                                p_unit->executor_ID = rank;
+                                // First Assign the steal count of the worker to the task
+                                p_unit->steal_counter = workers[rank].steal_counter;
+                                // Then Increment the steal count of the worker
+                                workers[rank].steal_counter++;
+
+                                // This stolen Node is pushed in the private linked list of the worker.
+                                pushTraceWorker(&workers[rank], p_unit);
+
                         // }
                         // pthread_mutex_unlock(&p_pool->lock);
                 }
@@ -508,6 +569,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                         p_unit = p_pool->p_head;
                         p_pool->p_head = NULL;
                         p_pool->p_tail = NULL;
+                        p_unit->executor_ID = rank;
                         pool_head_pop[rank]++;
                         // pthread_mutex_lock(&p_pool->lock);
                         sharedCounter[rank]--;
@@ -519,6 +581,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                 /* Pop from the head. */
                 p_unit = p_pool->p_head;
                 p_pool->p_head = p_unit->p_prev;
+                p_unit->executor_ID = rank;
                 pool_head_pop[rank]++;
                 // pthread_mutex_lock(&p_pool->lock);
                 sharedCounter[rank]--;
@@ -544,8 +607,18 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         int rank;
         ABT_xstream_self_rank(&rank);
 
+        workers[rank].async_counter++;  //Increment the Async Counter before pushing into the Deque
+
+        // Assign Task Meta-Data to all units associated with the pool
+        p_unit->task_ID = workers[rank].async_counter;
+        p_unit->creator_ID = rank;
+        p_unit->executor_ID = -1;
+        p_unit->steal_counter = -1;     // It will be non-zero only when an this task gets stolen
+
         pthread_mutex_lock(&p_pool->lock);
         // pthread_mutex_lock(&pplock);
+
+
         net_push++;
         pool_net_push[rank]++;
         // pthread_mutex_unlock(&pplock);

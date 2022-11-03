@@ -55,5 +55,13 @@ void argolib_join(Task_handle **list, int size)
         argolib_core_join(list, size);
 }
 
+void argolib_start_tracing(){
+        void argolib_core_start_tracing();
+}
+
+void argolib_stop_tracing(){
+        void argolib_core_stop_tracing();
+}
+
 
 #endif
