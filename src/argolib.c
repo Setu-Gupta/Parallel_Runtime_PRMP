@@ -6,6 +6,9 @@ ABT_xstream *xstreams;
 ABT_pool *pools;
 ABT_sched *scheds;
 
+typedef void (*fptr_t)(void*);
+fptr_t func;
+
 static void create_pools(int num, ABT_pool *pools);
 static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds);
 
@@ -15,6 +18,7 @@ static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds);
 
 typedef struct unit_t unit_t;
 typedef struct pool_t pool_t;
+typedef struct task_metadata_t task_metadata_t;
 
 struct unit_t
 {
@@ -23,13 +27,19 @@ struct unit_t
         unsigned int creator_ID;
         unsigned int executor_ID;
         unsigned int steal_counter;
-
-        unit_t *trace_worker_list_next;       // For linked list of trace and replay
-        unit_t *trace_worker_list_prev;       // For linked list of trace and replay
         
         unit_t *p_prev;
         unit_t *p_next;
         ABT_thread thread;
+};
+
+struct task_metadata_t{
+        unsigned int task_ID;
+        unsigned int creator_ID;
+        unsigned int executor_ID;
+        unsigned int steal_counter;
+
+        task_metadata_t *trace_worker_list_next;
 };
 
 struct pool_t
@@ -71,42 +81,45 @@ typedef struct trace_worker
 {
         unsigned int async_counter;
         unsigned int steal_counter;
-        unit_t* task_list_head;
-        unit_t* task_list_tail;
+        task_metadata_t* task_list_head;
+        task_metadata_t* task_list_tail;
 } trace_worker_t;
+
+void copyTaskMetadata(unit_t* unit, task_metadata_t* task_metadata){
+        task_metadata->creator_ID = unit->creator_ID;
+        task_metadata->executor_ID = unit->executor_ID;
+        task_metadata->steal_counter = unit->steal_counter;
+        task_metadata->task_ID = unit->task_ID;
+        task_metadata->trace_worker_list_next = NULL;
+}
 
 // Push happens on the Head
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-void pushTraceWorker(trace_worker_t* trace_worker, unit_t* task){
-        pthread_mutex_lock(&lock);
-        printf("Steal:\n");
-        printf("\tTask ID: %d\tCreator ID: %d\tExecutor ID: %d\tSteal Counter: %d\n", task->task_ID, task->creator_ID, task->executor_ID, task->steal_counter);
+void pushTraceWorker(trace_worker_t* trace_worker, task_metadata_t* task){
+        // pthread_mutex_lock(&lock);
         if(trace_worker->task_list_head == NULL || trace_worker->task_list_tail == NULL){
                 trace_worker->task_list_head = task;
                 trace_worker->task_list_tail = task;
                 task->trace_worker_list_next = NULL;
-                task->trace_worker_list_prev = NULL;
         } else {
-                task->trace_worker_list_prev = NULL;
                 task->trace_worker_list_next = trace_worker->task_list_head;
-                trace_worker->task_list_head->trace_worker_list_prev = task;
                 trace_worker->task_list_head = task;
         }
 
-        unit_t* ptr = trace_worker->task_list_head;
-        printf("Worker ID: %d\n", trace_worker->task_list_head->executor_ID);
-        while(ptr != NULL)
-        {
-                printf("%d ", ptr->task_ID);
-                ptr = ptr->trace_worker_list_next;
-        }
-        printf("\n\n");
-        pthread_mutex_unlock(&lock);
+        // unit_t* ptr = trace_worker->task_list_head;
+        // printf("Worker ID: %d\n", trace_worker->task_list_head->executor_ID);
+        // while(ptr != NULL)
+        // {
+        //         printf("(TID: %d, CID: %d, EID: %d, SC: %d)->", ptr->task_ID, ptr->creator_ID, ptr->executor_ID, ptr->steal_counter);
+        //         ptr = ptr->trace_worker_list_next;
+        // }
+        // printf("\n\n");
+        // pthread_mutex_unlock(&lock);
 }
 
 // Pop Happens on the Tail
-unit_t* popTraceWorker(trace_worker_t* trace_worker){
-        unit_t* ret;
+task_metadata_t* popTraceWorker(trace_worker_t* trace_worker){
+        task_metadata_t* ret;
         if(trace_worker->task_list_head == NULL || trace_worker->task_list_tail == NULL){
                 ret = NULL;
         } else if(trace_worker->task_list_head == trace_worker->task_list_tail){
@@ -116,11 +129,9 @@ unit_t* popTraceWorker(trace_worker_t* trace_worker){
         } else{
                 ret = trace_worker->task_list_tail;
 
-                trace_worker->task_list_tail = ret->trace_worker_list_prev;
                 trace_worker->task_list_tail->trace_worker_list_next = NULL;
 
                 ret->trace_worker_list_next = NULL;
-                ret->trace_worker_list_prev = NULL;
         }
         return ret;
 }
@@ -182,8 +193,8 @@ void argolib_core_start_tracing()
 
 void aggregate_tasks_lists()
 {
-        unit_t** aggregated_list_heads = (unit_t**)malloc(num_xstreams * sizeof(unit_t*));
-        unit_t** aggregated_list_tails = (unit_t**)malloc(num_xstreams * sizeof(unit_t*));
+        task_metadata_t** aggregated_list_heads = (task_metadata_t**)malloc(num_xstreams * sizeof(task_metadata_t*));
+        task_metadata_t** aggregated_list_tails = (task_metadata_t**)malloc(num_xstreams * sizeof(task_metadata_t*));
         
         for(int i = 0; i < num_xstreams; i++)
         {
@@ -194,30 +205,29 @@ void aggregate_tasks_lists()
         // Go over the list of each worker and aggregate the tasks into aggregated_list
         for(int i = 0; i < num_xstreams; i++)
         {
-                unit_t* ptr = workers[i].task_list_head;
+                task_metadata_t* ptr = workers[i].task_list_head;
                 while(ptr != NULL)
                 {
+                        task_metadata_t* next_ptr = ptr->trace_worker_list_next;
+
                         unsigned int Wc = ptr->creator_ID;
                         if(aggregated_list_heads[Wc] == NULL)
                         {
-                                aggregated_list_heads[Wc] = ptr;
-                                ptr->trace_worker_list_prev = NULL;
                                 ptr->trace_worker_list_next = NULL;
                         }
                         else
                         {
                                 ptr->trace_worker_list_next = aggregated_list_heads[Wc];
-                                aggregated_list_heads[Wc]->trace_worker_list_prev = ptr;
-                                ptr->trace_worker_list_prev = NULL;
                         }
-                        ptr = ptr->trace_worker_list_next;
+                        aggregated_list_heads[Wc] = ptr;
+                        ptr = next_ptr;
                 }
         }
         
         // Set the tails
         for(int i = 0; i < num_xstreams; i++)
         {
-                unit_t* ptr = aggregated_list_heads[i];
+                task_metadata_t* ptr = aggregated_list_heads[i];
                 while(ptr->trace_worker_list_next != NULL) ptr = ptr->trace_worker_list_next;
                 aggregated_list_tails[i] = ptr;
         }
@@ -233,7 +243,7 @@ void aggregate_tasks_lists()
         free(aggregated_list_tails);
 }
 
-void sort(unit_t** arr, unsigned int length)
+void sort(task_metadata_t** arr, unsigned int length)
 {
         // Use bubble sort to sort based on task_ID
         for(int i = 0; i < (int)length; i++)
@@ -242,7 +252,7 @@ void sort(unit_t** arr, unsigned int length)
                 {
                         if(arr[j]->task_ID > arr[j+1]->task_ID)
                         {
-                                unit_t* temp = arr[j];
+                                task_metadata_t* temp = arr[j];
                                 arr[j] = arr[j+1];
                                 arr[j+1] = temp;
                         }
@@ -254,7 +264,7 @@ void sort_tasks_lists()
 {
         for(int i = 0; i < num_xstreams; i++)
         {
-                unit_t* ptr = workers[i].task_list_head;
+                task_metadata_t* ptr = workers[i].task_list_head;
                 unsigned int count = 0;
                 while(ptr != NULL)
                 {
@@ -263,7 +273,7 @@ void sort_tasks_lists()
                 }
                 
                 // Allocate an array for sorting the list of unit_ts
-                unit_t** arr = (unit_t**)malloc(count * sizeof(unit_t*));
+                task_metadata_t** arr = (task_metadata_t**)malloc(count * sizeof(task_metadata_t*));
                 
                 // Move all tasks to the array
                 ptr = workers[i].task_list_head;
@@ -285,32 +295,30 @@ void sort_tasks_lists()
                         // Insert at tail
                         arr[i]->trace_worker_list_next = NULL;
                         workers[i].task_list_tail->trace_worker_list_next = arr[i];
-                        arr[i]->trace_worker_list_prev = workers[i].task_list_tail;
                         workers[i].task_list_tail = arr[i];
                 }
                 free(arr);
         }
 }
 
-pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
 void argolib_core_stop_tracing()
 {
         if(!trace_collected)
         {
 
-                pthread_mutex_lock(&lock2);
+                pthread_mutex_lock(&lock);
                 for(int i = 0; i < num_xstreams; i++)
                 {
-                        unit_t* ptr = workers[i].task_list_head;
+                        task_metadata_t* ptr = workers[i].task_list_head;
                         printf("Replay Worker: %d\n\t", i);
                         while(ptr != NULL)
                         {
-                                printf("%d ", ptr->task_ID);
+                                printf("0x%x ", ptr->task_ID);
                                 ptr = ptr->trace_worker_list_next;
                         }
                         printf("\n\n");
                 }
-                pthread_mutex_unlock(&lock2);
+                pthread_mutex_unlock(&lock);
                 printf("Stop Tracing Called\n");
 
                 // Aggregate and sort the lists
@@ -333,10 +341,10 @@ void argolib_core_stop_tracing()
 void argolib_destroy_worker(trace_worker_t w)
 {
         // Delete the task list
-        unit_t* t = w.task_list_head;
+        task_metadata_t* t = w.task_list_head;
         while(t)
         {
-                unit_t* temp = t;
+                task_metadata_t* temp = t;
                 t = t->trace_worker_list_next;
                 free(temp);
         }
@@ -462,7 +470,7 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
                 target_pool = pools[theif_rank];
 
                 // Remove one node from the list
-                unit_t* temp = workers[rank].task_list_head;
+                task_metadata_t* temp = workers[rank].task_list_head;
                 workers[rank].task_list_head = workers[rank].task_list_head->trace_worker_list_next;
                 free(temp);
         }
@@ -476,6 +484,8 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
                           ABT_THREAD_ATTR_NULL, thread_pointer);
 
         pool_task[rank]++;
+
+        ABT_thread_get_thread_func(*thread_pointer, &func);
 
         return thread_pointer;
 }
@@ -510,7 +520,6 @@ void argolib_core_kernel(fork_t fptr, void *args)
         double timeStart = ABT_get_wtime(); // Gives current time in S
         fptr(args);
         double timeEnd = ABT_get_wtime();
-
         printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0);
 
         print_stats();
@@ -564,13 +573,23 @@ static ABT_unit pool_create_unit(ABT_pool pool, ABT_thread thread)
         unit_t *p_unit = (unit_t *)calloc(1, sizeof(unit_t));
         if (!p_unit)
                 return ABT_UNIT_NULL;
+
+        p_unit->creator_ID = -1;
+        p_unit->executor_ID = -1;
+        p_unit->task_ID = -1;
+        p_unit->steal_counter = -1;
+
+        p_unit->p_prev = NULL;
+        p_unit->p_next = NULL;
+
         p_unit->thread = thread;
         return (ABT_unit)p_unit;
 }
 
 static void pool_free_unit(ABT_pool pool, ABT_unit unit)
 {
-        // Do not do anythig as unit will be used for tracking tasks
+        unit_t *p_unit = (unit_t *)unit;
+        free(p_unit);
 }
 
 static ABT_bool pool_is_empty(ABT_pool pool)
@@ -655,8 +674,29 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                         workers[rank].steal_counter++;
 
                                         // This stolen Node is pushed in the private linked list of the worker.
-                                        if(trace_enabled)
-                                                pushTraceWorker(&workers[rank], p_unit);
+                                        if(trace_enabled){
+                                                pthread_mutex_lock(&lock);
+
+                                                // Copy the metadata from unit_t to a new task_metadata_t
+                                                task_metadata_t* task_metadata = (task_metadata_t*)malloc(sizeof(task_metadata_t));
+                                                copyTaskMetadata(p_unit, task_metadata);
+
+                                                pushTraceWorker(&workers[rank], task_metadata);
+
+                                                printf("Stolen By: %d\n", rank);
+                                                for(int i = 0; i < num_xstreams; i++){
+                                                        printf("\tWorker ID: %d\n\t\t", i);
+                                                        task_metadata_t* ptr = workers[i].task_list_head;
+                                                        while(ptr != NULL)
+                                                        {
+                                                                printf("(TID: 0x%x, CID: %d, EID: %d, SC: %d)->", ptr->task_ID, ptr->creator_ID, ptr->executor_ID, ptr->steal_counter);
+                                                                ptr = ptr->trace_worker_list_next;
+                                                        }
+                                                        printf("\n");
+                                                }
+                                                printf("\n\n");
+                                                pthread_mutex_unlock(&lock);
+                                        }
 
                                 // }
                                 // pthread_mutex_unlock(&p_pool->lock);
@@ -720,6 +760,9 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         }
         if (!p_unit)
                 return ABT_THREAD_NULL;
+
+        // printf("Pop:\t%p\n", (void *)funccc);
+
         // pthread_mutex_lock(&pplock);
         net_pop++;
         pool_net_pop[rank]++;
@@ -732,6 +775,12 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         pool_t *p_pool;
         ABT_pool_get_data(pool, (void **)&p_pool);
         unit_t *p_unit = (unit_t *)unit;
+
+        fptr_t funccc;
+        ABT_thread_get_thread_func(p_unit->thread, &funccc);
+        if(funccc != func){
+                printf("Fuck Me\n");
+        }
 
         int rank;
         ABT_xstream_self_rank(&rank);
