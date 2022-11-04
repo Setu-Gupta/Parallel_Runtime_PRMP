@@ -76,20 +76,32 @@ typedef struct trace_worker
 } trace_worker_t;
 
 // Push happens on the Head
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 void pushTraceWorker(trace_worker_t* trace_worker, unit_t* task){
-        // printf("Steal:\n");
-        // printf("\tTask ID: %d\tCreator ID: %d\tExecutor ID: %d\tSteal Counter: %d\n", task->task_ID, task->creator_ID, task->executor_ID, task->steal_counter);
+        pthread_mutex_lock(&lock);
+        printf("Steal:\n");
+        printf("\tTask ID: %d\tCreator ID: %d\tExecutor ID: %d\tSteal Counter: %d\n", task->task_ID, task->creator_ID, task->executor_ID, task->steal_counter);
         if(trace_worker->task_list_head == NULL || trace_worker->task_list_tail == NULL){
                 trace_worker->task_list_head = task;
                 trace_worker->task_list_tail = task;
                 task->trace_worker_list_next = NULL;
                 task->trace_worker_list_prev = NULL;
         } else {
+                task->trace_worker_list_prev = NULL;
                 task->trace_worker_list_next = trace_worker->task_list_head;
                 trace_worker->task_list_head->trace_worker_list_prev = task;
                 trace_worker->task_list_head = task;
         }
-        // printf("Push Completed\n");
+
+        unit_t* ptr = trace_worker->task_list_head;
+        printf("Worker ID: %d\n", trace_worker->task_list_head->executor_ID);
+        while(ptr != NULL)
+        {
+                printf("%d ", ptr->task_ID);
+                ptr = ptr->trace_worker_list_next;
+        }
+        printf("\n\n");
+        pthread_mutex_unlock(&lock);
 }
 
 // Pop Happens on the Tail
@@ -149,6 +161,7 @@ void print_shared_counter(){
 
 void argolib_core_start_tracing()
 {
+        printf("Start Tracing Called\n");
         if(trace_enabled)
                 return;
 
@@ -279,11 +292,27 @@ void sort_tasks_lists()
         }
 }
 
+pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
 void argolib_core_stop_tracing()
 {
-        printf("Called");
         if(!trace_collected)
         {
+
+                pthread_mutex_lock(&lock2);
+                for(int i = 0; i < num_xstreams; i++)
+                {
+                        unit_t* ptr = workers[i].task_list_head;
+                        printf("Replay Worker: %d\n\t", i);
+                        while(ptr != NULL)
+                        {
+                                printf("%d ", ptr->task_ID);
+                                ptr = ptr->trace_worker_list_next;
+                        }
+                        printf("\n\n");
+                }
+                pthread_mutex_unlock(&lock2);
+                printf("Stop Tracing Called\n");
+
                 // Aggregate and sort the lists
                 aggregate_tasks_lists();
                 sort_tasks_lists();

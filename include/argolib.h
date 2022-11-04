@@ -67,14 +67,14 @@ void argolib_join(Task_handle **list, int size)
  */
 void argolib_start_tracing()
 {
-        void argolib_core_start_tracing();
+        argolib_core_start_tracing();
 }
 
 /* Used to stop trace collection
 */
 void argolib_stop_tracing()
 {
-        void argolib_core_stop_tracing();
+        argolib_core_stop_tracing();
 }
 
 #endif

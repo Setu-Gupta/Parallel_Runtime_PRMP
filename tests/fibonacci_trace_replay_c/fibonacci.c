@@ -34,7 +34,7 @@ void fib(fibonacci_arg_t* fib_arg)
 
 void compute_kernel(fibonacci_arg_t *arg, int *result)
 {
-        fib(arg);
+        argolib_core_kernel((fork_t)fib, (void*)arg);
         *result += arg->ret;
 }
 
