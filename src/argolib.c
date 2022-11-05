@@ -235,31 +235,36 @@ void sort_tasks_lists()
                         count++;
                         ptr = ptr->trace_worker_list_next;
                 }
-                
-                // Allocate an array for sorting the list of task_metadata
-                task_metadata_t** arr = (task_metadata_t**)malloc(count * sizeof(task_metadata_t*));
-                
-                // Move all tasks to the array
-                ptr = workers[i].task_list_head;
-                int idx = 0;
-                while(ptr != NULL)
-                {
-                        arr[idx++] = ptr;
-                        ptr = ptr->trace_worker_list_next;
-                }
 
-                // Sort the array in descending order
-                sort(arr, count);
+                if(count != 0){ // Do sorting only if the Aggregated list has elements
+                
+                        // Allocate an array for sorting the list of task_metadata
+                        task_metadata_t** arr = (task_metadata_t**)malloc(count * sizeof(task_metadata_t*));
+                        
+                        // Move all tasks to the array
+                        ptr = workers[i].task_list_head;
+                        int idx = 0;
+                        while(ptr != NULL)
+                        {
+                                arr[idx++] = ptr;
+                                ptr = ptr->trace_worker_list_next;
+                        }
 
-                // Move all tasks back to a linked list
-                workers[i].task_list_head = arr[0];
-                for(int i = 1; i < (int)count; i++)
-                {
-                        // Insert at head
-                        arr[i]->trace_worker_list_next = workers[i].task_list_head;
-                        workers[i].task_list_head = arr[i];
+                        // Sort the array in descending order
+                        sort(arr, count);
+
+                        // Move all tasks back to a linked list
+                        workers[i].task_list_head = arr[0];
+                        arr[0]->trace_worker_list_next = NULL;
+                        for(int j = 1; j < (int)count; j++)
+                        {
+                                // Insert at head
+                                arr[j]->trace_worker_list_next = workers[i].task_list_head;
+                                workers[i].task_list_head = arr[j];
+                        }
+                        free(arr);
+
                 }
-                free(arr);
         }
 }
 
@@ -276,7 +281,7 @@ void argolib_core_stop_tracing()
                         printf("Replay Worker: %d\n\t", i);
                         while(ptr != NULL)
                         {
-                                printf("0x%x ", ptr->task_ID);
+                                printf("(TID: 0x%x, CID: %d, EID: %d, SC: %d)->", ptr->task_ID, ptr->creator_ID, ptr->executor_ID, ptr->steal_counter);
                                 ptr = ptr->trace_worker_list_next;
                         }
                         printf("\n\n");
@@ -293,7 +298,7 @@ void argolib_core_stop_tracing()
                         printf("Replay Worker: %d\n\t", i);
                         while(ptr != NULL)
                         {
-                                printf("0x%x ", ptr->task_ID);
+                                printf("(TID: 0x%x, CID: %d, EID: %d, SC: %d)->", ptr->task_ID, ptr->creator_ID, ptr->executor_ID, ptr->steal_counter);
                                 ptr = ptr->trace_worker_list_next;
                         }
                         printf("\n\n");
@@ -310,7 +315,7 @@ void argolib_core_stop_tracing()
                         printf("Replay Worker: %d\n\t", i);
                         while(ptr != NULL)
                         {
-                                printf("0x%x ", ptr->task_ID);
+                                printf("(TID: 0x%x, CID: %d, EID: %d, SC: %d)->", ptr->task_ID, ptr->creator_ID, ptr->executor_ID, ptr->steal_counter);
                                 ptr = ptr->trace_worker_list_next;
                         }
                         printf("\n\n");
@@ -470,6 +475,7 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         workers[rank].async_counter++;
         if(trace_collected && workers[rank].task_list_head->task_ID == workers[rank].async_counter)
         {
+                printf("Steal Executed from Replay\n");
                 // Find who stole this task last time
                 int theif_rank = workers[rank].task_list_head->executor_ID;
 
