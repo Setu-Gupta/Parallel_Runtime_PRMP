@@ -473,28 +473,31 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
         
         workers[rank].async_counter++;
-        if(trace_collected && workers[rank].task_list_head->task_ID == workers[rank].async_counter)
+        if(trace_collected)
         {
-                printf("Steal Executed from Replay\n");
-                // Find who stole this task last time
-                int theif_rank = workers[rank].task_list_head->executor_ID;
+                if(workers[rank].task_list_head != NULL && workers[rank].task_list_head->task_ID == workers[rank].async_counter)
+                {
+                        printf("Steal Executed from Replay\n");
+                        // Find who stole this task last time
+                        int theif_rank = workers[rank].task_list_head->executor_ID;
 
-                // Remove one node from the list
-                task_metadata_t* temp = workers[rank].task_list_head;
-                workers[rank].task_list_head = workers[rank].task_list_head->trace_worker_list_next;
-                free(temp);
-                
-                // Send to theif
-                int theif_stolen_pointer = workers[rank].task_list_head->steal_counter;
-                
-                // Create a thread which is to be sent
-                ABT_thread* t = (ABT_thread*)malloc(sizeof(ABT_thread));
-                ABT_thread_create(*temp_pool, fptr, args, ABT_THREAD_ATTR_NULL, thread_pointer);
-                ABT_pool_pop_thread(*temp_pool, t);
+                        // Send to theif
+                        int theif_stolen_pointer = workers[rank].task_list_head->steal_counter;
+                        
+                        // Remove one node from the list
+                        task_metadata_t* temp = workers[rank].task_list_head;
+                        workers[rank].task_list_head = workers[rank].task_list_head->trace_worker_list_next;
+                        free(temp);
+                        
+                        // Create a thread which is to be sent
+                        ABT_thread* t = (ABT_thread*)malloc(sizeof(ABT_thread));
+                        ABT_thread_create(*temp_pool, fptr, args, ABT_THREAD_ATTR_NULL, thread_pointer);
+                        ABT_pool_pop_thread(*temp_pool, t);
 
-                pthread_mutex_lock(&workers[theif_rank].worker_lock);
-                workers[theif_rank].stolen_tasks_array[theif_stolen_pointer] = t; 
-                pthread_mutex_unlock(&workers[theif_rank].worker_lock);
+                        pthread_mutex_lock(&workers[theif_rank].worker_lock);
+                        workers[theif_rank].stolen_tasks_array[theif_stolen_pointer] = t; 
+                        pthread_mutex_unlock(&workers[theif_rank].worker_lock);
+                }
         }
         else
         {
@@ -660,7 +663,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         {
                 if(trace_collected)
                 {
-                        // Spin untill a thread is available
+                        // Spin until a thread is available
                         while(true)
                         {
                                 ABT_thread* t;
