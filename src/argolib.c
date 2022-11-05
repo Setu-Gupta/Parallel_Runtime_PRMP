@@ -663,6 +663,9 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         {
                 if(trace_collected)
                 {
+                        // Unlock pool as at this stage only steal is possible
+                        pthread_mutex_unlock(&p_pool->lock);
+                        
                         // Spin until a thread is available
                         while(true)
                         {
