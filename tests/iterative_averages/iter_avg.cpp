@@ -49,7 +49,7 @@ int main(int argc, char **argv)
         for(int i = 0; i < ITERS; i++)
         {
                 argolib::start_tracing();
-                iter_avg(arr, SIZE);
+                argolib::kernel([=](){iter_avg(arr, SIZE);});
                 argolib::stop_tracing();
         }
         argolib::finalize();
