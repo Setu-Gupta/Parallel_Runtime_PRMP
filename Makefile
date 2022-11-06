@@ -11,7 +11,7 @@ LDFLAGS	= -labt -shared
 # Set the optimization level for the release build
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
-DBGFLAGS = -O0 -Og -g3 -ggdb 
+DBGFLAGS = -O0 -Og -g3 -ggdb3 
 
 # Gather all the source files
 SRC = $(wildcard src/*.c)

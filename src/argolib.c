@@ -80,6 +80,15 @@ int *mailBox_task;
 bool trace_enabled = false;     // Tracks whether trace replay is enabled or not
 bool trace_collected = false;   // Tracks whether trace has been collected or not
 
+typedef struct stolen_task_wrapper stolen_task_wrapper;
+
+struct stolen_task_wrapper{
+        ABT_thread task;
+        unsigned int task_id;
+        unsigned int executor_id;
+        unsigned int creator_id;
+};
+
 // Metadata associated with each worker
 typedef struct trace_worker
 {
@@ -88,7 +97,7 @@ typedef struct trace_worker
         task_metadata_t* task_list_head;
 
         pthread_mutex_t worker_lock;
-        ABT_thread** stolen_tasks_array;
+        stolen_task_wrapper** stolen_tasks_array;
 } trace_worker_t;
 
 ABT_pool* temp_pool;    // Temporary pool used for trace and replay
@@ -151,10 +160,10 @@ void print_shared_counter(){
 
 void argolib_core_start_tracing()
 {
-        printf("Start Tracing Called\n");
         if(trace_enabled)
                 return;
 
+        printf("Start Tracing Called\n");
         trace_enabled = true;
         trace_collected = false;
 
@@ -326,7 +335,7 @@ void argolib_core_stop_tracing()
                 for(int i = 0; i < num_xstreams; i++)
                 {
                         unsigned int length = workers[i].steal_counter;
-                        workers[i].stolen_tasks_array = (ABT_thread **)malloc(length * sizeof(ABT_thread));
+                        workers[i].stolen_tasks_array = (stolen_task_wrapper **)malloc(length * sizeof(stolen_task_wrapper));
                         for(unsigned int j = 0; j < length; j++)
                                 workers[i].stolen_tasks_array[j] = NULL;
                 }
@@ -385,8 +394,7 @@ void argolib_core_init(int argc, char **argv)
         scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
         
         // Create a temporary pool which is used for trace and replay
-        temp_pool = (ABT_pool *)malloc(sizeof(ABT_pool));
-        ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, temp_pool);
+        temp_pool = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
 
         mailBox = (unit_t **)malloc(sizeof(unit_t*) * num_xstreams);
         sharedCounter = (int *)calloc(num_xstreams, sizeof(int));
@@ -402,6 +410,8 @@ void argolib_core_init(int argc, char **argv)
                 mailBox[i] = NULL;
                 requestSent[i] = false;
                 requestServed[i] = false;
+
+                ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &temp_pool[i]);
         }
 
         ABT_init(argc, argv);
@@ -475,28 +485,40 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         workers[rank].async_counter++;
         if(trace_collected)
         {
+                if(workers[rank].task_list_head != NULL)
+                        printf("[Rank %d]Head TID: 0x%x\tCreated TID: 0x%x\n", rank, workers[rank].task_list_head->task_ID, workers[rank].async_counter);
                 if(workers[rank].task_list_head != NULL && workers[rank].task_list_head->task_ID == workers[rank].async_counter)
                 {
-                        printf("Steal Executed from Replay\n");
                         // Find who stole this task last time
-                        int theif_rank = workers[rank].task_list_head->executor_ID;
+                        int thief_rank = workers[rank].task_list_head->executor_ID;
 
-                        // Send to theif
-                        int theif_stolen_pointer = workers[rank].task_list_head->steal_counter;
+                        // Send to thief
+                        int thief_stolen_pointer = workers[rank].task_list_head->steal_counter;
+
+                        // Create a thread which is to be sent
+                        stolen_task_wrapper* t = (stolen_task_wrapper*)malloc(sizeof(stolen_task_wrapper));
+                        t->creator_id = rank;
+                        t->executor_id = thief_rank;
+                        t->task_id = workers[rank].task_list_head->task_ID;
                         
                         // Remove one node from the list
-                        task_metadata_t* temp = workers[rank].task_list_head;
                         workers[rank].task_list_head = workers[rank].task_list_head->trace_worker_list_next;
-                        free(temp);
                         
-                        // Create a thread which is to be sent
-                        ABT_thread* t = (ABT_thread*)malloc(sizeof(ABT_thread));
-                        ABT_thread_create(*temp_pool, fptr, args, ABT_THREAD_ATTR_NULL, thread_pointer);
-                        ABT_pool_pop_thread(*temp_pool, t);
+                        // pthread_mutex_lock(&workers[rank].worker_lock);
+                        ABT_thread_create(temp_pool[rank], fptr, args, ABT_THREAD_ATTR_NULL, thread_pointer);
+                        ABT_pool_pop_thread(temp_pool[rank], &(t->task));
+                        // pthread_mutex_unlock(&workers[rank].worker_lock);
+                        // t->task = *thread_pointer;
 
-                        pthread_mutex_lock(&workers[theif_rank].worker_lock);
-                        workers[theif_rank].stolen_tasks_array[theif_stolen_pointer] = t; 
-                        pthread_mutex_unlock(&workers[theif_rank].worker_lock);
+                        // pthread_mutex_lock(&workers[thief_rank].worker_lock);
+                        workers[thief_rank].stolen_tasks_array[thief_stolen_pointer] = t; 
+                        printf("Sending Task to Executer in Replay: TID: 0x%x\tCID: %d\tEID: %d\tSC: %d\n", workers[rank].async_counter, rank, thief_rank, thief_stolen_pointer);
+                        // pthread_mutex_unlock(&workers[thief_rank].worker_lock);
+                } else{
+                        ABT_pool target_pool;
+                        target_pool = pools[rank];
+                        ABT_thread_create(target_pool, fptr, args,
+                                ABT_THREAD_ATTR_NULL, thread_pointer);
                 }
         }
         else
@@ -663,30 +685,32 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         {
                 if(trace_collected)
                 {
+                        printf("Worker %d is Empty. Waiting for Tasks. SC: %u\n", rank, workers[rank].steal_counter);
                         // Unlock pool as at this stage only steal is possible
-                        pthread_mutex_unlock(&p_pool->lock);
                         
                         // Spin until a thread is available
                         while(true)
                         {
-                                ABT_thread* t;
+                                stolen_task_wrapper* t;
                                 const unsigned int steal_pointer = workers[rank].steal_counter;
                                 
-                                pthread_mutex_lock(&workers[rank].worker_lock);
+                                // pthread_mutex_lock(&workers[rank].worker_lock);
                                 t = workers[rank].stolen_tasks_array[steal_pointer]; 
-                                pthread_mutex_unlock(&workers[rank].worker_lock);
+                                // pthread_mutex_unlock(&workers[rank].worker_lock);
                                 
                                 // If a task was received, increment the steal counter and start executing the task 
+                                // printf("%d\n", rank);
                                 if(t != NULL)
                                 {
+                                        printf("[Worker %d]Received Task: TID: 0x%x\tCID: %d\tEID: %d\n", rank, t->task_id, t->creator_id, t->executor_id);
                                         workers[rank].steal_counter++;
-                                        return *t;
+                                        pthread_mutex_unlock(&p_pool->lock);
+                                        return (t->task);
                                 }
                         }
                 }
-                
                 // First Check the Mailbox for a task
-                if (mailBox[rank] != NULL)
+                else if (mailBox[rank] != NULL)
                 {
                         // printf("MailBox Non-Empty at %d\n", rank);
                         // Take Mutex on Mailbox as it can be Written by the Victim as well
@@ -812,6 +836,11 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         p_unit->steal_counter = -1;     // It will be non-zero only when an this task gets stolen
 
         pthread_mutex_lock(&p_pool->lock);
+
+        // if(trace_collected){
+        //         if(rank != 0)
+        //                 printf("[Worker %d] Push\n", rank);
+        // }
 
 
         net_push++;
@@ -944,7 +973,7 @@ static void sched_run(ABT_sched sched)
                 /* Execute one work unit from the scheduler's pool */
                 ABT_thread thread;
                 ABT_pool_pop_thread_ex(pools[0], &thread, ABT_POOL_CONTEXT_OWNER_PRIMARY);
-                if (thread != ABT_THREAD_NULL)
+                if (thread != ABT_THREAD_NULL && thread != NULL)
                 {
                         /* "thread" is associated with its original pool (pools[0]). */
                         ABT_self_schedule(thread, ABT_POOL_NULL);
