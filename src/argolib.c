@@ -446,6 +446,13 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
                         workers[theif_rank].stolen_tasks_array[theif_stolen_pointer] = t; 
                         pthread_mutex_unlock(&workers[theif_rank].worker_lock);
                 }
+                else
+                {
+                        ABT_pool target_pool;
+                        target_pool = pools[rank];
+                        ABT_thread_create(target_pool, fptr, args,
+                                  ABT_THREAD_ATTR_NULL, thread_pointer);
+                }
         }
         else
         {
