@@ -4,7 +4,6 @@
 ABT_xstream *xstreams;
 ABT_pool *pools;
 ABT_sched *scheds;
-thread_arg_t *thread_args;
 
 static void create_pools(int num, ABT_pool *pools);
 static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds);
@@ -148,7 +147,6 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         /** Create ULTs.
          * The pool associated with this thread is same as the pool of the caller.
          * thread_pointer will be returned to the caller hence defined static.
-         * Preferably, the caller should pass a thread_arg_t pointer
          */
         Task_handle *thread_pointer = (Task_handle *)malloc(sizeof(Task_handle));
 
@@ -197,7 +195,7 @@ void argolib_core_kernel(fork_t fptr, void *args)
 
         printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0);
 
-        print_stats();
+        // print_stats();
 }
 
 void argolib_core_finalize()

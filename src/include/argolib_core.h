@@ -7,13 +7,6 @@
 #include <stdbool.h>
 #include <abt.h>
 
-// For giving an ID to each thread
-typedef struct
-{
-    void* args; //Pointer to the real arguments to the function
-    int tid;    //ID to each thread
-} thread_arg_t;
-
 typedef ABT_thread Task_handle;
 typedef void (*fork_t)(void* args);
 
