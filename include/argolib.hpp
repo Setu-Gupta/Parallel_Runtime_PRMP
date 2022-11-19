@@ -3,50 +3,26 @@
 // Ref: https://stackoverflow.com/questions/11030517/unknown-number-of-arguments-in-function
 // Ref: https://caiorss.github.io/C-Cpp-Notes/passing-lambda.html
 // Ref: https://stackoverflow.com/questions/73976001/g-undefined-reference-to-while-linking-with-a-custom-shared-library/73977954#73977954
+// Ref: https://github.com/vivkumar/cse502/blob/master/hclib/inc/hclib_cpp.h
 
 #ifndef __ARGOLIB_HPP__
 #define __ARGOLIB_HPP__
 
 #include <initializer_list>
 #include <functional>
+#include <type_traits>
 
 extern "C"      // Import C style functions 
 {
         #include "./../src/include/argolib_core.h"
 }
 
-using FunctionCallback = std::function<void(void)>;
-namespace CLambdaWorkaround
+template<typename T>
+void lambda_wrapper(void *arg)
 {
-
-        FunctionCallback& get_callback()
-        {   
-		static FunctionCallback callback;
-                return callback;
-        }
-
-        void set_callback(FunctionCallback func)
-        {   
-                FunctionCallback& callback = get_callback();
-                callback = func;
-        }   
-
-        void lambda_adapter(void*)
-        {   
-                get_callback()();
-        }   
-
-        void lambda_kernel_wrapper(FunctionCallback func)
-        {   
-                set_callback(func);
-                argolib_core_kernel(&lambda_adapter, NULL);
-        }   
-
-        Task_handle* lambda_fork_wrapper(FunctionCallback func)
-        {   
-                set_callback(func);
-                return argolib_core_fork(&lambda_adapter, NULL);
-        }   
+    T* lambda = static_cast<T*>(arg);
+    (*lambda)();
+    delete lambda;
 }
 
 namespace argolib
@@ -69,14 +45,16 @@ namespace argolib
         template <typename T>
         void kernel(T &&lambda)
         {
-                CLambdaWorkaround::lambda_kernel_wrapper(lambda);			
+                typedef typename std::remove_reference<T>::type U;
+                return argolib_core_kernel(lambda_wrapper<U>, new U(lambda));
         }
 
         // Creates a new ULT to run lambda and returns the task handle to the ULT
         template <typename T>
         Task_handle* fork(T &&lambda)
         {
-                return CLambdaWorkaround::lambda_fork_wrapper(lambda);			
+                typedef typename std::remove_reference<T>::type U;
+                return argolib_core_fork(lambda_wrapper<U>, new U(lambda));
         }
 
         // Called by join to join multiple tasks
