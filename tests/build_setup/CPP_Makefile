@@ -3,13 +3,13 @@ CXX = g++
 # Set the flags to be passed to the compiler regardless of the optimization level
 CFLAGS = -march=native -pedantic -Wall -Werror -Wextra
 # Set the flags to be passed to the linker
-LDFLAGS	= -largolib -labt
+LDFLAGS	= -largolib -labt -lpcm
 # Set the optimization level for the release build
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
 DBGFLAGS = -Og -g3 -ggdb -fsanitize=address
 # Set up the include path
-INCPATH = $(ARGOLIB_INSTALL_DIR)/include $(ARGOBOTS_INSTALL_DIR)/include
+INCPATH = $(ARGOLIB_INSTALL_DIR)/include $(ARGOBOTS_INSTALL_DIR)/include $(PCMROOT)/src
 # Set up argolib library path for debug build
 DBGARGOLIB = $(ARGOLIB_INSTALL_DIR)/debug/lib
 # Set up argolib library path for release build
@@ -35,12 +35,12 @@ release: $(TARGETS)								# Set the default target as release for make
 debug: $(DEBUG_TARGETS)								# Set the debug target for make
 
 $(TARGETS): $(OBJECTS)								# Specify how to compile TARGETS
-	$(CXX) -L$(ARGOLIB) -L$(RELARGOLIB) $(OPTFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CXX) -L$(ARGOLIB) -L$(RELARGOLIB) -L$(PCMROOT)/build/lib $(OPTFLAGS) $^ -o $@ $(LDFLAGS)
 $(OBJECTS): $(SRC)								# Specify how to compile OBJECTS
 	$(CXX) -L$(ARGOLIB) -L$(RELARGOLIB) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(OPTFLAGS) -c $^ -o $@ $(LDFLAGS)
 
 $(DEBUG_TARGETS) : $(DEBUG_OBJECTS)						# Specify how to compile DEBUG_TARGETS
-	$(CXX) -L$(ARGOLIB) -L$(DBGARGOLIB) $(DBGFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CXX) -L$(ARGOLIB) -L$(DBGARGOLIB) -L$(PCMROOT)/build/lib $(DBGFLAGS) $^ -o $@ $(LDFLAGS)
 $(DEBUG_OBJECTS): $(SRC)							# Specify how to compile DEBUG_OBJECTS
 	$(CXX) -L$(ARGOLIB) -L$(DBGARGOLIB) $(foreach inc_path,$(INCPATH),-I$(inc_path)) $(CFLAGS) $(DBGFLAGS) -c $^ -o $@ $(LDFLAGS)
 

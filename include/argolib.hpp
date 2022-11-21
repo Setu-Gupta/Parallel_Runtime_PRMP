@@ -11,10 +11,42 @@
 #include <initializer_list>
 #include <functional>
 #include <type_traits>
+#include <pthread.h>
+#include "pcm.h"
+#include <chrono>
+#include <thread>
 
 extern "C"      // Import C style functions 
 {
         #include "./../src/include/argolib_core.h"
+}
+
+pthread_t profiler;     // Pthread for the profiling daemon
+// Define the function to handle degree of prallelism
+void configure_DOP(double jpi_prev, double jpi_cur)
+{
+        std::cout << "JPIs: Prev: " << jpi_prev << " Cur: " << jpi_cur << std::endl;
+}
+
+// Create the daemon worker function
+// Ref: https://stackoverflow.com/questions/4184468/sleep-for-milliseconds
+bool daemon_shutdown = false;
+void* daemon_profiler(void *)
+{
+        // Update DOP every 100ms
+        const unsigned int fixed_interval = 500;
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));   // Sleep for 5 milliseconds to wait for warmup
+        
+        double jpi_prev = 0;
+        while(!daemon_shutdown)
+        {
+                double jpi_cur = logger::get_jpi();
+                configure_DOP(jpi_prev, jpi_cur);
+                jpi_prev = jpi_cur;
+                std::this_thread::sleep_for(std::chrono::microseconds(fixed_interval));
+        }
+        return NULL;
 }
 
 template<typename T>
@@ -32,12 +64,24 @@ namespace argolib
          // Arguments “argc” and “argv” are the ones passed in the call to user main method.
         void init(int argc, char **argv)
         {
+                logger::start();
+
+                // Set up the profiler
+                if(pthread_create(&profiler, NULL, &daemon_profiler, NULL) != 0)
+                {
+                        printf("[ERR]: Could not create profiler!\n");
+                        exit(-1);
+                }
+
                 argolib_core_init(argc, argv);
         }
 
         // Finalizes the ArgoLib runtime, and performs the cleanup
         void finalize()
         {
+                // Stop the daemon
+                daemon_shutdown = true;
+
                 argolib_core_finalize();
         }
 
