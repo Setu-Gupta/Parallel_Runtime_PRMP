@@ -3,21 +3,25 @@ The sources from where the code was borrowed (if applicable) can be found in SOU
 The description of each directory and the files in them can be found in FILE_STRUCT.
 
 How to build:
-        1. Run make with the target as help to see what all build options are availabe
+        1. Set up the environment variable PCMROOT to point to the installation directory for pcm
+                $ export PCMROOT=/absolute/path/to/pcm/directory
+        2. Run make with the target as help to see what all build options are available
                 $ make help
-        2. Run make with appropriate build options
+        3. Run make with appropriate build options
                 $ make <target of your choice> [-j[NUM_BUILD_JOBS]]
 
 How to use the generated libraries:
         1. Set up the environment variables which points to the argobots and argolib installation directories:
                 $ export ARGOBOTS_INSTALL_DIR=/absolute/path/to/argobots/installation/directory
                 $ export ARGOLIB_INSTALL_DIR=/absolute/path/to/argolib/installation/directory
-        2. To compile C++ aplications with argolib, use:
+        2. Set up the LD_LIBRARY_PATH variable to include PCMROOT library
+                $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PCMROOT/build/lib
+        3. To compile C++ applications with argolib, use:
                 $ g++ -O3 -I$(ARGOLIB_INSTALL_DIR)/include -L$(ARGOLIB_INSTALL_DIR)/release/lib -I$(ARGOBOTS_INSTALL_DIR)/include -L$(ARGOBOTS_INSTALL_DIR)/lib -largolib -labt <sources> -o <binary_name>
-        3. Set up LD_LIBRARY_PATH to include argolib and argobots runtime libraries:
+        4. Set up LD_LIBRARY_PATH to include argolib and argobots runtime libraries:
                 $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
-                $ export LD_LIBRARY_PATh=$ARGOLIB_INSTALL_DIR/release/lib:$LD_LIBRARY_PATH
-        4. Lauch you application after setting up the number of argolib workers:
+                $ export LD_LIBRARY_PATH=$ARGOLIB_INSTALL_DIR/release/lib:$LD_LIBRARY_PATH
+        5. Launch you application after setting up the number of argolib workers:
                 $ ARGOLIB_WORKERS=<NUM_WORKERS> <binary_name>
 
 How to create custom tests:
@@ -36,6 +40,7 @@ How to create custom tests:
 
 How to build tests:
         1. Set up environment variables
+                $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PCMROOT/build/lib
                 $ export ARGOBOTS_INSTALL_DIR=/path/to/argobots/installation
                 $ export ARGOLIB_INSTALL_DIR=/path/to/this/directory
                 $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
@@ -52,5 +57,9 @@ How to run tests:
                 $ cd tests/<test_dir>/bin/<release | debug>
         2. Export ASAN_OPTIONS=use_odr_indicator=1 if you want to run the debug binary to ignore one definition rule violations
                 $ export ASAN_OPTIONS=use_odr_indicator=1
-        3. Execute the binary
+        3. Export the number of workers to use
+                $ export ARGOLIB_WORKERS=<num_workers>
+        4. Enable random work stealing if desired
+                $ export ARGOLIB_RANDOMWS=<1 | 0>
+        4. Execute the binary
                 $ ./<binary_name>
