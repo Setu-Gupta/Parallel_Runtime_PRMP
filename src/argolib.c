@@ -44,6 +44,16 @@ int *pool_tail_pop;
 int *pool_stolen_from;
 int *pool_stole_from;
 
+int *sleep;     // One variable for each xstream. If value is not zero, sleep
+
+void sleep(int num_threads)
+{
+        for (int i = 0; i < num_xstreams; i++)
+                sleep[i] = 0;
+        for (int i = 0; i < num_threads; i++)
+                sleep[i] = 1;
+}
+
 void print_stats()
 {
 
@@ -78,6 +88,7 @@ void argolib_core_init(int argc, char **argv)
         pool_tail_pop = (int *)calloc(num_xstreams, sizeof(int));
         pool_stolen_from = (int *)calloc(num_xstreams, sizeof(int));
         pool_stole_from = (int *)calloc(num_xstreams, sizeof(int));
+        sleep = (int *)calloc(num_xstreams, sizeof(int));
 
         // Minimum size Execution Streams and Threads when taken from user
         if (num_xstreams <= 0)
@@ -261,6 +272,12 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
         int rank;
         ABT_xstream_self_rank(&rank);
+       
+        volatile int slep = sleep[rank];
+        while(slep)
+        {
+                slep = sleep[rank];
+        }
 
         pthread_mutex_lock(&p_pool->lock);
         if (p_pool->p_head == NULL)
@@ -310,6 +327,12 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
 
         int rank;
         ABT_xstream_self_rank(&rank);
+
+        volatile int slep = sleep[rank];
+        while(slep)
+        {
+                slep = sleep[rank];
+        }
 
         pthread_mutex_lock(&p_pool->lock);
         pthread_mutex_lock(&pplock);
