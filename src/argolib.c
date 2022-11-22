@@ -44,14 +44,40 @@ int *pool_tail_pop;
 int *pool_stolen_from;
 int *pool_stole_from;
 
-int *sleep;     // One variable for each xstream. If value is not zero, sleep
+int* sleep;     // One variable for each xstream. If value is not zero, sleep
 
-void sleep(int num_threads)
+void xstream_lullaby(int num_threads)
 {
-        for (int i = 0; i < num_xstreams; i++)
-                sleep[i] = 0;
-        for (int i = 0; i < num_threads; i++)
-                sleep[i] = 1;
+        // Can't make the main execution sleep
+        for (int i = 1; i < num_xstreams; i++){
+                if(sleep[i] == 0 && num_threads > 0){
+                        sleep[i] = 1;
+                        num_threads--;
+                }
+        }
+        
+        printf("Sleeping: ");
+        for(int i = 0; i < num_xstreams; i++){
+                if(sleep[i])
+                        printf("%d, ", i);
+        }
+        printf("\n");
+}
+
+void xstream_alarm(int num_threads)
+{
+        for (int i = 1; i < num_xstreams; i++){
+                if(sleep[i] == 1 && num_threads > 0){
+                        sleep[i] = 0;
+                        num_threads--;
+                }
+        }
+        printf("Awake: ");
+        for(int i = 0; i < num_xstreams; i++){
+                if(!sleep[i])
+                        printf("%d, ", i);
+        }
+        printf("\n");
 }
 
 void print_stats()
@@ -89,6 +115,8 @@ void argolib_core_init(int argc, char **argv)
         pool_stolen_from = (int *)calloc(num_xstreams, sizeof(int));
         pool_stole_from = (int *)calloc(num_xstreams, sizeof(int));
         sleep = (int *)calloc(num_xstreams, sizeof(int));
+        for(int i = 0; i < num_xstreams; i++)
+                sleep[i] = 0;
 
         // Minimum size Execution Streams and Threads when taken from user
         if (num_xstreams <= 0)
@@ -206,7 +234,7 @@ void argolib_core_kernel(fork_t fptr, void *args)
 
         printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0);
 
-        // print_stats();
+        print_stats();
 }
 
 void argolib_core_finalize()
@@ -274,10 +302,6 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         ABT_xstream_self_rank(&rank);
        
         volatile int slep = sleep[rank];
-        while(slep)
-        {
-                slep = sleep[rank];
-        }
 
         pthread_mutex_lock(&p_pool->lock);
         if (p_pool->p_head == NULL)
@@ -286,6 +310,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         }
         else if (p_pool->p_head == p_pool->p_tail)
         {
+                if(((context & ABT_POOL_CONTEXT_OWNER_PRIMARY) && !slep) || (context & ABT_POOL_CONTEXT_OWNER_SECONDARY))
                 { /* Only one thread. */
                         p_unit = p_pool->p_head;
                         p_pool->p_head = NULL;
@@ -302,7 +327,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                         pool_stolen_from[rank]++;
                 }
         }
-        else
+        else if(!slep)  // Pop from head only if the worker is awake
         {
                 /* Pop from the head. */
                 p_unit = p_pool->p_head;
@@ -328,11 +353,7 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         int rank;
         ABT_xstream_self_rank(&rank);
 
-        volatile int slep = sleep[rank];
-        while(slep)
-        {
-                slep = sleep[rank];
-        }
+        // volatile int slep = sleep[rank];
 
         pthread_mutex_lock(&p_pool->lock);
         pthread_mutex_lock(&pplock);

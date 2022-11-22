@@ -15,6 +15,8 @@ void argolib_core_finalize();
 void argolib_core_kernel(fork_t fptr, void* args);
 Task_handle* argolib_core_fork(fork_t fptr, void* args);
 void argolib_core_join(Task_handle** list, int size);
-void sleep(int num_threads);
+void xstream_lullaby(int num_threads);
+void xstream_alarm(int num_threads);
+
 
 #endif

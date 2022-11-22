@@ -7,11 +7,11 @@ INCPATH = $(ARGOBOTS_INSTALL_DIR)/include ./src/include
 # Set up argobots library path
 ARGOLIBPATH = $(ARGOBOTS_INSTALL_DIR)/lib
 # Set the flags to be passed to the linker
-LDFLAGS	= -labt -shared
+LDFLAGS	= -labt -shared -lpthread
 # Set the optimization level for the release build
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
-DBGFLAGS = -Og -g3 -ggdb -fsanitize=address
+DBGFLAGS = -Og -g3 -ggdb
 
 # Gather all the source files
 SRC = $(wildcard src/*.c)

@@ -22,10 +22,47 @@ extern "C"      // Import C style functions
 }
 
 pthread_t profiler;     // Pthread for the profiling daemon
+bool configureCalled = false;
 // Define the function to handle degree of prallelism
 void configure_DOP(double jpi_prev, double jpi_cur)
 {
-        std::cout << "JPIs: Prev: " << jpi_prev << " Cur: " << jpi_cur << std::endl;
+        // std::cout << "JPIs: Prev: " << jpi_prev << " Cur: " << jpi_cur << std::endl;
+        int INC = 1;
+        int DEC = -1;
+        static int lastAction = INC;
+        const int wChange = 1; // find experimentally on your system
+
+        if(!configureCalled)
+        {
+                configureCalled = true;
+                xstream_lullaby(wChange);
+                lastAction = DEC;
+                return;
+        }
+        if (jpi_cur < jpi_prev)
+        {
+                if (lastAction == DEC)
+                {
+                        xstream_lullaby(wChange);
+                }
+                else
+                {
+                        xstream_alarm(wChange);
+                }
+        }
+        else
+        {
+                if (lastAction == DEC)
+                {
+                        xstream_alarm(wChange);
+                        lastAction = INC;
+                }
+                else
+                {
+                        xstream_lullaby(wChange);
+                        lastAction = DEC;
+                }
+        }
 }
 
 // Create the daemon worker function

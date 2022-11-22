@@ -3,11 +3,11 @@ CXX = g++
 # Set the flags to be passed to the compiler regardless of the optimization level
 CFLAGS = -march=native -pedantic -Wall -Werror -Wextra
 # Set the flags to be passed to the linker
-LDFLAGS	= -largolib -labt -lpcm
+LDFLAGS	= -largolib -labt -lpcm -lpthread
 # Set the optimization level for the release build
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
-DBGFLAGS = -Og -g3 -ggdb -fsanitize=address
+DBGFLAGS = -Og -g3 -ggdb
 # Set up the include path
 INCPATH = $(ARGOLIB_INSTALL_DIR)/include $(ARGOBOTS_INSTALL_DIR)/include $(PCMROOT)/src
 # Set up argolib library path for debug build
