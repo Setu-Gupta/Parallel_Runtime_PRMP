@@ -55,13 +55,15 @@ void xstream_lullaby(int num_threads)
                         num_threads--;
                 }
         }
-        
+
+        /*
         printf("Sleeping: ");
         for(int i = 0; i < num_xstreams; i++){
                 if(sleep[i])
                         printf("%d, ", i);
         }
         printf("\n");
+        */
 }
 
 void xstream_alarm(int num_threads)
@@ -72,12 +74,15 @@ void xstream_alarm(int num_threads)
                         num_threads--;
                 }
         }
+        
+        /*
         printf("Awake: ");
         for(int i = 0; i < num_xstreams; i++){
                 if(!sleep[i])
                         printf("%d, ", i);
         }
         printf("\n");
+        */
 }
 
 void print_stats()
@@ -142,12 +147,12 @@ void argolib_core_init(int argc, char **argv)
                         if (is_randws)
                         {
                                 ABT_pool_create_basic(ABT_POOL_RANDWS, ABT_POOL_ACCESS_MPMC,
-                                                      ABT_TRUE, &pools[i]);
+                                                ABT_TRUE, &pools[i]);
                         }
                         else
                         {
                                 ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE,
-                                                      &pools[i]);
+                                                &pools[i]);
                         }
                 }
         }
@@ -166,7 +171,7 @@ void argolib_core_init(int argc, char **argv)
                         }
                         //?Difference between ABT_POOL_RANDWS and ABT_SCHED_RANDWS?
                         ABT_sched_create_basic(ABT_SCHED_DEFAULT, num_xstreams, tmp,
-                                               ABT_SCHED_CONFIG_NULL, &scheds[i]);
+                                        ABT_SCHED_CONFIG_NULL, &scheds[i]);
                         free(tmp);
                 }
         }
@@ -196,7 +201,7 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         //  When should we use ABT_thread_create_to ?
         //  This internally pushes the thread into the pool
         ABT_thread_create(target_pool, fptr, args,
-                          ABT_THREAD_ATTR_NULL, thread_pointer);
+                        ABT_THREAD_ATTR_NULL, thread_pointer);
 
         return thread_pointer;
 }
@@ -300,7 +305,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
         int rank;
         ABT_xstream_self_rank(&rank);
-       
+
         volatile int slep = sleep[rank];
 
         pthread_mutex_lock(&p_pool->lock);
@@ -361,9 +366,9 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         pool_net_push[rank]++;
         pthread_mutex_unlock(&pplock);
         if (context & (ABT_POOL_CONTEXT_OP_THREAD_CREATE |
-                       ABT_POOL_CONTEXT_OP_THREAD_CREATE_TO |
-                       ABT_POOL_CONTEXT_OP_THREAD_REVIVE |
-                       ABT_POOL_CONTEXT_OP_THREAD_REVIVE_TO))
+                                ABT_POOL_CONTEXT_OP_THREAD_CREATE_TO |
+                                ABT_POOL_CONTEXT_OP_THREAD_REVIVE |
+                                ABT_POOL_CONTEXT_OP_THREAD_REVIVE_TO))
         {
                 /* Push to the head. */
                 if (p_pool->p_head)
@@ -426,7 +431,7 @@ static void create_pools(int num, ABT_pool *pools)
         /* Pool definition */
         ABT_pool_user_def def;
         ABT_pool_user_def_create(pool_create_unit, pool_free_unit, pool_is_empty,
-                                 pool_pop, pool_push, &def);
+                        pool_pop, pool_push, &def);
         ABT_pool_user_def_set_init(def, pool_init);
         ABT_pool_user_def_set_free(def, pool_free);
         /* Pool configuration */
@@ -435,7 +440,7 @@ static void create_pools(int num, ABT_pool *pools)
         /* The same as a pool created by ABT_pool_create_basic(). */
         const int automatic = 1;
         ABT_pool_config_set(config, ABT_pool_config_automatic.key,
-                            ABT_pool_config_automatic.type, &automatic);
+                        ABT_pool_config_automatic.type, &automatic);
 
         int i;
         for (i = 0; i < num; i++)
@@ -447,7 +452,7 @@ static void create_pools(int num, ABT_pool *pools)
 }
 
 /** Creating Scheduler for Work Stealing
- */
+*/
 
 typedef struct
 {
@@ -493,7 +498,7 @@ static void sched_run(ABT_sched sched)
                 {
                         /* Steal a work unit from other pools */
                         target =
-                            (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools - 1) + 1);
+                                (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools - 1) + 1);
                         ABT_pool_pop_thread_ex(pools[target], &thread, ABT_POOL_CONTEXT_OWNER_SECONDARY);
                         if (thread != ABT_THREAD_NULL)
                         {
@@ -533,17 +538,17 @@ static void create_scheds(int num, ABT_pool *pools, ABT_sched *scheds)
         int i, k;
 
         ABT_sched_config_var cv_event_freq = {.idx = 0,
-                                              .type = ABT_SCHED_CONFIG_INT};
+                .type = ABT_SCHED_CONFIG_INT};
 
         ABT_sched_def sched_def = {.type = ABT_SCHED_TYPE_ULT,
-                                   .init = sched_init,
-                                   .run = sched_run,
-                                   .free = sched_free,
-                                   .get_migr_pool = NULL};
+                .init = sched_init,
+                .run = sched_run,
+                .free = sched_free,
+                .get_migr_pool = NULL};
 
         /* Create a scheduler config */
         ABT_sched_config_create(&config, cv_event_freq, 10,
-                                ABT_sched_config_var_end);
+                        ABT_sched_config_var_end);
 
         my_pools = (ABT_pool *)malloc(num * sizeof(ABT_pool));
         for (i = 0; i < num; i++)
