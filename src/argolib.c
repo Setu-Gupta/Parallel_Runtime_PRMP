@@ -24,16 +24,20 @@ struct unit_t
 
 struct pool_t
 {
-        pthread_mutex_t lock;
         unit_t *p_head;
         unit_t *p_tail;
 };
 
 int num_xstreams;
 
+pthread_mutex_t stealLock;
+pthread_cond_t stealConditionVariable;
+pthread_mutex_t *poolLock;
+pthread_cond_t *poolConditionVariable;
 unit_t **mailBox;
 int *sharedCounter;
 int *requestBox;
+int *targetRank;
 bool *requestSent;
 bool *requestServed;
 
@@ -87,6 +91,8 @@ void argolib_core_init(int argc, char **argv)
         bool is_randws = randomws ? (atoi(randomws) > 0 ? 1 : 0) : 0;
 
         pthread_mutex_init(&pplock, 0);
+        pthread_mutex_init(&stealLock, 0);
+        pthread_cond_init(&stealConditionVariable, NULL);
         pool_net_push = (int *)calloc(num_xstreams, sizeof(int));
         pool_net_pop = (int *)calloc(num_xstreams, sizeof(int));
         pool_head_push = (int *)calloc(num_xstreams, sizeof(int));
@@ -106,7 +112,10 @@ void argolib_core_init(int argc, char **argv)
         pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
         scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
 
+        poolLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * num_xstreams);
+        poolConditionVariable = (pthread_cond_t *)malloc(sizeof(pthread_cond_t) * num_xstreams);
         mailBox = (unit_t **)malloc(sizeof(unit_t*) * num_xstreams);
+        targetRank = (int *)malloc(sizeof(int) * num_xstreams);
         sharedCounter = (int *)calloc(num_xstreams, sizeof(int));
         requestBox = (int *)calloc(num_xstreams, sizeof(int));
         requestSent = (bool *)calloc(num_xstreams, sizeof(bool));
@@ -115,9 +124,12 @@ void argolib_core_init(int argc, char **argv)
         for (int i = 0; i < num_xstreams; i++)
         {
                 requestBox[i] = -1; // Initialize Request Box IDs with -1
+                targetRank[i] = -1;
                 mailBox[i] = NULL;
                 requestSent[i] = false;
                 requestServed[i] = false;
+                pthread_mutex_init(&poolLock[i], NULL);
+                pthread_cond_init(&poolConditionVariable[i], NULL);
         }
 
         ABT_init(argc, argv);
@@ -258,6 +270,8 @@ void argolib_core_finalize()
         free(mailBox);
         free(requestBox);
         free(sharedCounter);
+        free(poolLock);
+        free(poolConditionVariable);
 
         free(pool_head_push);
         free(pool_head_pop);
@@ -306,47 +320,34 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
         int requesterRank;
 
         // Always First check if there is a request in the Request Box
-        pthread_mutex_lock(&p_pool->lock);
+
         isValidRequest = requestBox[rank] != -1;
         if (isValidRequest)
         {
-                printf("Valid Request\n");
-                requesterRank = requestBox[rank];
-                // There is a request in the Request Box
+                if(p_pool->p_head != NULL){
+                        // printf("Valid Request\n");
+                        requesterRank = requestBox[rank];
+                        // There is a request in the Request Box
 
-                // Pop from the Tail
-                p_unit = p_pool->p_tail;
-                p_pool->p_tail = p_unit->p_next;
-                pool_tail_pop[rank]++;
-                pool_stolen_from[rank]++;
+                        // Pop from the Tail
+                        p_unit = p_pool->p_tail;
+                        p_pool->p_tail = p_unit->p_next;
+                        pool_tail_pop[rank]++;
+                        pool_stolen_from[rank]++;
 
-                sharedCounter[rank]--;  //Decrement shared counter due to pop from tail
-                mailBox[requesterRank] = p_unit;        // Put the popped thread on the requesters Mailbox
-                requestBox[rank] = -1;   // Clear The request
+                        sharedCounter[rank]--;  //Decrement shared counter due to pop from tail
+                        mailBox[requesterRank] = p_unit;        // Put the popped thread on the requesters Mailbox
+                        requestBox[rank] = -1;   // Clear The request
 
-                requestServed[requesterRank] = true;
+                        // printf("Request Served: %p\n", (void*) p_unit);
+
+                        pthread_cond_signal(&stealConditionVariable);
+                } 
         }
-        // pthread_mutex_unlock(&p_pool->lock);
 
-        // pthread_mutex_lock(&p_pool->lock);
         if (p_pool->p_head == NULL)
         {
-                /* Empty. */
-                // First Check the Mailbox for a task
-                if (mailBox[rank] != NULL)
-                {
-                        printf("MailBox Non-Empty at %d\n", rank);
-                        // Take Mutex on Mailbox as it can be Written by the Victim as well
-                        // pthread_mutex_lock(&p_pool->lock);
-                        // {
-                                // There is a task in Mailbox; pop it
-                                p_unit = mailBox[rank]; // Variable that returns the thread
-                                mailBox[rank] = NULL;   // Empty the Mailbox
-                                mailBox_task[rank]++;
-                        // }
-                        // pthread_mutex_unlock(&p_pool->lock);
-                }
-                else if(!requestSent[rank])
+                pthread_mutex_lock(&stealLock);
                 {
                         for(int i = (rank + 1) % num_xstreams; i != rank; i = (i + 1) % num_xstreams)
                         {
@@ -354,28 +355,50 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                                 // Send request to a Worker with non-empty deque
                                 target = i;
 
-                                pthread_mutex_lock(&pplock);
                                 int targetRequestBox = requestBox[target];
-                                pthread_mutex_unlock(&pplock);
 
-                                if (sharedCounter[target] >= 10 && targetRequestBox == -1)
+                                if (sharedCounter[target] > 3 && targetRequestBox == -1)
                                 {
                                         // Take lock on Request Box as it is read by the Victim as well
-                                        pthread_mutex_lock(&pplock);
                                         // Put a Steal Request in the Request Box
-                                        printf("Current Request box value seen by Worker %d for Target %d is %d\n", rank, target, requestBox[target]);
+                                        // printf("Current Request box value seen by Worker %d for Target %d is %d\n", rank, target, requestBox[target]);
                                         requestBox[target] = rank;      //Critical Section as multiple workers may be able to put request
-                                        pthread_mutex_unlock(&pplock);
 
-                                        printf("Request Sent by Worker %d to Worker %d\n", rank, target);
+                                        // printf("Request Sent by Worker %d to Worker %d\n", rank, target);
                                         requestSent[rank] = true;
+                                        targetRank[rank] = target;
+
+                                        while(mailBox[rank] == NULL){
+                                                // pthread_cond_wait(&stealConditionVariable, &stealLock); //wait for the condition
+                                                struct timespec timeToWait;
+                                                struct timeval now;
+                                                int timeInMs = 10;
+
+                                                gettimeofday(&now,NULL);
+
+
+                                                timeToWait.tv_sec = now.tv_sec;
+                                                timeToWait.tv_nsec = (now.tv_usec+1000UL*timeInMs)*1000UL;
+
+                                                pthread_cond_timedwait(&stealConditionVariable, &stealLock, &timeToWait); //wait for the condition
+                                        }
+
+                                        // printf("MailBox Non-Empty at %d\t%p\n", rank, (void*)mailBox[rank]);
+                                        // Take Mutex on Mailbox as it can be Written by the Victim as well
+                                        // pthread_mutex_lock(&poolLock[rank]);
+                                        // {
+                                                // There is a task in Mailbox; pop it
+                                                p_unit = mailBox[rank]; // Variable that returns the thread
+                                                mailBox[rank] = NULL;   // Empty the Mailbox
+                                                mailBox_task[rank]++;
+                                        // }
+                                        // pthread_mutex_unlock(&poolLock[rank]);
+
                                         break;
                                 }
                         } // TODO: Potential Deadlock if only 2 ES and Stealer is empty and the other worker has only 1 or 0 threads
-                } else if(requestServed[rank]){
-                        requestSent[rank] = false;
-                        requestServed[rank] = false;
                 }
+                pthread_mutex_unlock(&stealLock);
         }
         else if (p_pool->p_head == p_pool->p_tail)
         {
@@ -384,9 +407,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                         p_pool->p_head = NULL;
                         p_pool->p_tail = NULL;
                         pool_head_pop[rank]++;
-                        // pthread_mutex_lock(&p_pool->lock);
                         sharedCounter[rank]--;
-                        // pthread_mutex_unlock(&p_pool->lock);
                 }
         }
         else
@@ -395,18 +416,13 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
                 p_unit = p_pool->p_head;
                 p_pool->p_head = p_unit->p_prev;
                 pool_head_pop[rank]++;
-                // pthread_mutex_lock(&p_pool->lock);
                 sharedCounter[rank]--;
-                // pthread_mutex_unlock(&p_pool->lock);
         }
-        pthread_mutex_unlock(&p_pool->lock);
 
         if (!p_unit)
                 return ABT_THREAD_NULL;
-        // pthread_mutex_lock(&pplock);
         net_pop++;
         pool_net_pop[rank]++;
-        // pthread_mutex_unlock(&pplock);
         return p_unit->thread;
 }
 
@@ -419,11 +435,8 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         int rank;
         ABT_xstream_self_rank(&rank);
 
-        pthread_mutex_lock(&p_pool->lock);
-        // pthread_mutex_lock(&pplock);
         net_push++;
         pool_net_push[rank]++;
-        // pthread_mutex_unlock(&pplock);
         if (context & (ABT_POOL_CONTEXT_OP_THREAD_CREATE |
                        ABT_POOL_CONTEXT_OP_THREAD_CREATE_TO |
                        ABT_POOL_CONTEXT_OP_THREAD_REVIVE |
@@ -461,7 +474,6 @@ static void pool_push(ABT_pool pool, ABT_unit unit, ABT_pool_context context)
         }
         sharedCounter[rank]++;
         // print_shared_counter();
-        pthread_mutex_unlock(&p_pool->lock);
 }
 
 static int pool_init(ABT_pool pool, ABT_pool_config config)
@@ -470,13 +482,6 @@ static int pool_init(ABT_pool pool, ABT_pool_config config)
         if (!p_pool)
                 return ABT_ERR_MEM;
 
-        /* Initialize the spinlock */
-        int ret = pthread_mutex_init(&p_pool->lock, 0);
-        if (ret != 0)
-        {
-                free(p_pool);
-                return ABT_ERR_SYS;
-        }
         ABT_pool_set_data(pool, (void *)p_pool);
         return ABT_SUCCESS;
 }
@@ -485,7 +490,6 @@ static void pool_free(ABT_pool pool)
 {
         pool_t *p_pool;
         ABT_pool_get_data(pool, (void **)&p_pool);
-        pthread_mutex_destroy(&p_pool->lock);
         free(p_pool);
 }
 
@@ -538,10 +542,11 @@ static void sched_run(ABT_sched sched)
         sched_data_t *p_data;
         int num_pools;
         ABT_pool *pools;
-        // int target;
         ABT_bool stop;
+        int rank;
         // unsigned seed = time(NULL);
 
+        ABT_xstream_self_rank(&rank);
         ABT_sched_get_data(sched, (void **)&p_data);
         ABT_sched_get_num_pools(sched, &num_pools);
         pools = (ABT_pool *)malloc(num_pools * sizeof(ABT_pool));
@@ -555,7 +560,13 @@ static void sched_run(ABT_sched sched)
                 if (thread != ABT_THREAD_NULL)
                 {
                         /* "thread" is associated with its original pool (pools[0]). */
-                        ABT_self_schedule(thread, ABT_POOL_NULL);
+                        if(targetRank[rank] == -1){
+                                ABT_self_schedule(thread, ABT_POOL_NULL);
+                        }                                
+                        else{
+                                ABT_self_schedule(thread, pools[targetRank[rank]]);
+                                targetRank[rank] = -1;
+                        }
                 }
 
                 // If thread == ABT_THREAD_NULL, then the main pool must have requested
@@ -565,8 +576,8 @@ static void sched_run(ABT_sched sched)
                 // else if (num_pools > 1)
                 // {
                 //         /* Steal a work unit from other pools */
-                //         target =
-                //             (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools - 1) + 1);
+                //         // target =
+                //         //     (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools - 1) + 1);
                 //         ABT_pool_pop_thread_ex(pools[target], &thread, ABT_POOL_CONTEXT_OWNER_SECONDARY);
                 //         if (thread != ABT_THREAD_NULL)
                 //         {

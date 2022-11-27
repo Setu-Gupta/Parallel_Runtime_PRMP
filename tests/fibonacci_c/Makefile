@@ -5,7 +5,7 @@ CFLAGS = -march=native -pedantic -Wall -Werror -Wextra
 # Set the flags to be passed to the linker
 LDFLAGS	= -largolib -labt
 # Set the optimization level for the release build
-OPTFLAGS = -Ofast
+OPTFLAGS = -O0
 # Set the flags for the debug build
 DBGFLAGS = -Og -g3 -ggdb 
 # Set up the include path
