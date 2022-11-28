@@ -33,5 +33,4 @@ git checkout power_optimization;
 # Move the generated stats to plotting directory and generate plots
 mv tests/iterative_averages/bin/release/stats_* plotting_scripts/.;
 cd plotting_scripts;
-python3 plotter.py stats_opt opt.png
-python3 plotter.py stats_unopt unopt.png
+python3 plotter.py stats_opt stats_unopt plot.png;
