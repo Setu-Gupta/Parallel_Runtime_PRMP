@@ -55,5 +55,26 @@ void argolib_join(Task_handle **list, int size)
         argolib_core_join(list, size);
 }
 
+/**
+ * Used to start the trace collection for a compute kernel. This can be called multiple times.
+ * To use trace and replay optimization, the user should call the kernel in the following manner:
+ * loop
+ * {
+ *      start_tracing();
+ *      kernel();
+ *      stop_tracing();
+ * }
+ */
+void argolib_start_tracing()
+{
+        argolib_core_start_tracing();
+}
+
+/* Used to stop trace collection
+*/
+void argolib_stop_tracing()
+{
+        argolib_core_stop_tracing();
+}
 
 #endif

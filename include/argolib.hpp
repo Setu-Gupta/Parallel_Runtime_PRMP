@@ -24,45 +24,11 @@ void lambda_wrapper(void *arg) {
     delete lambda;
 }
 
-// using FunctionCallback = std::function<void(void)>;
-// namespace CLambdaWorkaround
-// {
-
-//         FunctionCallback& get_callback()
-//         {   
-// 		static FunctionCallback callback;
-//                 return callback;
-//         }
-
-//         void set_callback(FunctionCallback func)
-//         {   
-//                 FunctionCallback& callback = get_callback();
-//                 callback = func;
-//         }   
-
-//         void lambda_adapter(void*)
-//         {   
-//                 get_callback()();
-//         }   
-
-//         void lambda_kernel_wrapper(FunctionCallback func)
-//         {   
-//                 set_callback(func);
-//                 argolib_core_kernel(&lambda_adapter, NULL);
-//         }   
-
-//         Task_handle* lambda_fork_wrapper(FunctionCallback func)
-//         {   
-//                 set_callback(func);
-//                 return argolib_core_fork(&lambda_adapter, NULL);
-//         }   
-// }
-
 namespace argolib
 {
          // Initializes the ArgoLib runtime.
          // It should be the first thing to call in the user main.
-         // Arguments “argc” and “argv” are the ones passed in the call to user main method.
+         // Arguments argc and argv are the ones passed in the call to user main method.
         void init(int argc, char **argv)
         {
                 argolib_core_init(argc, argv);
@@ -80,7 +46,6 @@ namespace argolib
         {
                 typedef typename std::remove_reference<T>::type U;
                 return argolib_core_kernel(lambda_wrapper<U>, new U(lambda));
-                // CLambdaWorkaround::lambda_kernel_wrapper(lambda);			
         }
 
         // Creates a new ULT to run lambda and returns the task handle to the ULT
@@ -89,7 +54,6 @@ namespace argolib
         {
                 typedef typename std::remove_reference<T>::type U;
                 return argolib_core_fork(lambda_wrapper<U>, new U(lambda));
-                // return CLambdaWorkaround::lambda_fork_wrapper(lambda);			
         }
 
         // Called by join to join multiple tasks
@@ -115,6 +79,25 @@ namespace argolib
         void join(T ...handles)
         {
                 join_impl({handles...});    // Pass on all the arguments to the join_impl as a initializer list
+        }
+
+        // Used to start the trace collection for a compute kernel. This can be called multiple times.
+        // To use trace and replay optimization, the user should call the kernel in the following manner:
+        // loop
+        // {
+        //      start_tracing();
+        //      kernel();
+        //      stop_tracing();
+        // }
+        void start_tracing()
+        {
+                void argolib_core_start_tracing();
+        }
+        
+        // Used to stop trace collection
+        void stop_tracing()
+        {
+                void argolib_core_stop_tracing();
         }
 }
 

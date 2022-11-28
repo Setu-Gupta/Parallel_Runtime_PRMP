@@ -17,4 +17,7 @@ void argolib_core_kernel(fork_t fptr, void* args);
 Task_handle* argolib_core_fork(fork_t fptr, void* args);
 void argolib_core_join(Task_handle** list, int size);
 
+void argolib_core_stop_tracing();
+void argolib_core_start_tracing();
+
 #endif
