@@ -9,7 +9,7 @@
 
 //48 * 256 * 2048
 #define SIZE 10485760
-#define ITERATIONS 4096
+#define ITERATIONS 65536
 #define THRESHOLD 2048
 
 double* myNew, *myVal;
