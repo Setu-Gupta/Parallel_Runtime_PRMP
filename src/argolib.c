@@ -8,7 +8,11 @@ int num_threads;
 void argolib_init(int argc, char **argv)
 {
 	int is_randws = 0;
-	// Minimum size Execution Streams and Threads when taken from user
+	
+        char *workers = getenv("ARGOLIB_WORKERS");
+        num_xstreams = workers ? atoi(workers) : 1;
+
+        // Minimum size Execution Streams and Threads when taken from user
 	if (num_xstreams <= 0)
 		num_xstreams = 1;
 	if (num_threads <= 0)
