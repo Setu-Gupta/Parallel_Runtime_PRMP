@@ -14,7 +14,7 @@
 
 extern "C"      // Import C style functions 
 {
-        #include "./../src/include/argolib_core.h"
+        #include "argolib.h"
 }
 
 template<typename T>
@@ -24,40 +24,6 @@ void lambda_wrapper(void *arg) {
     delete lambda;
 }
 
-// using FunctionCallback = std::function<void(void)>;
-// namespace CLambdaWorkaround
-// {
-
-//         FunctionCallback& get_callback()
-//         {   
-// 		static FunctionCallback callback;
-//                 return callback;
-//         }
-
-//         void set_callback(FunctionCallback func)
-//         {   
-//                 FunctionCallback& callback = get_callback();
-//                 callback = func;
-//         }   
-
-//         void lambda_adapter(void*)
-//         {   
-//                 get_callback()();
-//         }   
-
-//         void lambda_kernel_wrapper(FunctionCallback func)
-//         {   
-//                 set_callback(func);
-//                 argolib_core_kernel(&lambda_adapter, NULL);
-//         }   
-
-//         Task_handle* lambda_fork_wrapper(FunctionCallback func)
-//         {   
-//                 set_callback(func);
-//                 return argolib_core_fork(&lambda_adapter, NULL);
-//         }   
-// }
-
 namespace argolib
 {
          // Initializes the ArgoLib runtime.
@@ -65,13 +31,13 @@ namespace argolib
          // Arguments “argc” and “argv” are the ones passed in the call to user main method.
         void init(int argc, char **argv)
         {
-                argolib_core_init(argc, argv);
+                argolib_init(argc, argv);
         }
 
         // Finalizes the ArgoLib runtime, and performs the cleanup
         void finalize()
         {
-                argolib_core_finalize();
+                argolib_finalize();
         }
 
         // Runs the top level recursive parallel prgram passed as the lambda
@@ -79,8 +45,7 @@ namespace argolib
         void kernel(T &&lambda)
         {
                 typedef typename std::remove_reference<T>::type U;
-                return argolib_core_kernel(lambda_wrapper<U>, new U(lambda));
-                // CLambdaWorkaround::lambda_kernel_wrapper(lambda);			
+                return argolib_kernel(lambda_wrapper<U>, new U(lambda));
         }
 
         // Creates a new ULT to run lambda and returns the task handle to the ULT
@@ -88,8 +53,7 @@ namespace argolib
         Task_handle* fork(T &&lambda)
         {
                 typedef typename std::remove_reference<T>::type U;
-                return argolib_core_fork(lambda_wrapper<U>, new U(lambda));
-                // return CLambdaWorkaround::lambda_fork_wrapper(lambda);			
+                return argolib_fork(lambda_wrapper<U>, new U(lambda));
         }
 
         // Called by join to join multiple tasks
@@ -105,7 +69,7 @@ namespace argolib
                 for(Task_handle* th : handles)
                         list[i++] = th;
                 
-                argolib_core_join(list, size);       // Pass the list and the size to argolib
+                argolib_join(list, size);       // Pass the list and the size to argolib
                 free(list);
         }
         
