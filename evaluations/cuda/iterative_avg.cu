@@ -1,7 +1,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <time.h>
-
+#include "timer.h"
 
 #define SIZE 10485760
 #define ITERATIONS 65536
@@ -32,34 +32,27 @@ int main()
         cudaMalloc((void**)&d_invec, (SIZE + 2) * sizeof(double));
         cudaMalloc((void**)&d_outvec, (SIZE + 2) * sizeof(double));
         cudaMemset(d_outvec, 0, (SIZE + 2) * sizeof(double));
-        
-        // Copy the data to the device
-        cudaMemcpy(d_invec, invec, (SIZE + 2) * sizeof(double), cudaMemcpyHostToDevice);
-
-        // Create CUDA events to time the kernel execution
-        cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-
-        // Run iterative averaging
-        cudaEventRecord(start);
-        for(int i = 0; i < ITERATIONS; i++)
+       
+        timer::kernel("Iterative Averaging Kernel", [=]()
         {
-                if(i%2) // Odd iterations
-                        average<<<8192, (SIZE + 2)/8192>>>(d_outvec, d_invec);
-                else    // Even iterations
-                        average<<<8192, (SIZE + 2)/8192>>>(d_invec, d_outvec);
-        }
-        cudaEventRecord(stop);
+                // Copy the data to the device
+                cudaMemcpy(d_invec, invec, (SIZE + 2) * sizeof(double), cudaMemcpyHostToDevice);
 
-        // Copy the data back to host
-        cudaMemcpy(outvec, d_outvec, (SIZE + 2) * sizeof(float), cudaMemcpyDeviceToHost);
-        
-        // Compute the time taken for execution
-        cudaEventSynchronize(stop);
-        float milliseconds = 0;
-        cudaEventElapsedTime(&milliseconds, start, stop);
-        std::cout  << "Time taken : " << milliseconds << "ms" << std::endl;
+                // Run iterative averaging
+                for(int i = 0; i < ITERATIONS; i++)
+                {
+                        if(i%2) // Odd iterations
+                                average<<<8192, (SIZE + 2)/8192>>>(d_outvec, d_invec);
+                        else    // Even iterations
+                                average<<<8192, (SIZE + 2)/8192>>>(d_invec, d_outvec);
+                }
+
+                // Wait for the kernel to finish execution
+                cudaDeviceSynchronize();
+
+                // Copy the data back to host
+                cudaMemcpy(outvec, d_outvec, (SIZE + 2) * sizeof(float), cudaMemcpyDeviceToHost);
+        });
 
         // Free up memory on device side
         cudaFree(d_invec);
