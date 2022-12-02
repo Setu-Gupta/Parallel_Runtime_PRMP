@@ -165,6 +165,21 @@ void print_shared_counter(){
 
 void argolib_core_start_tracing()
 {
+        net_push = 0;
+        net_pop = 0;
+        for(int i = 0; i < num_xstreams; i++){
+                pool_net_push[i] = 0;
+                pool_net_pop[i] = 0;
+                pool_head_push[i] = 0;
+                pool_head_pop[i] = 0;
+                pool_tail_push[i] = 0;
+                pool_tail_pop[i] = 0;
+                pool_stolen_from[i] = 0;
+                pool_stole_from[i] = 0;
+                pool_task[i] = 0;
+                mailBox_task[i] = 0;
+        }
+
         if(trace_enabled)
                 return;
 
@@ -499,8 +514,8 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         workers[rank].async_counter++;
         if(trace_collected)
         {
-                if(workers[rank].task_list_head != NULL)
-                        printf("[Rank %d]Head TID: 0x%x\tCreated TID: 0x%x\n", rank, workers[rank].task_list_head->task_ID, workers[rank].async_counter);
+                // if(workers[rank].task_list_head != NULL)
+                //         printf("[Rank %d]Head TID: 0x%x\tCreated TID: 0x%x\n", rank, workers[rank].task_list_head->task_ID, workers[rank].async_counter);
                 if(workers[rank].task_list_head != NULL && workers[rank].task_list_head->task_ID == workers[rank].async_counter)
                 {
                         // Find who stole this task last time
@@ -526,7 +541,7 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
 
                         // pthread_mutex_lock(&workers[thief_rank].worker_lock);
                         workers[thief_rank].stolen_tasks_array[thief_stolen_pointer] = t; 
-                        printf("Sending Task to Executer in Replay: TID: 0x%x\tCID: %d\tEID: %d\tSC: %d\n", workers[rank].async_counter, rank, thief_rank, thief_stolen_pointer);
+                        // printf("Sending Task to Executer in Replay: TID: 0x%x\tCID: %d\tEID: %d\tSC: %d\n", workers[rank].async_counter, rank, thief_rank, thief_stolen_pointer);
                         // pthread_mutex_unlock(&workers[thief_rank].worker_lock);
                 } else{
                         ABT_pool target_pool;
