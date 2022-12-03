@@ -5,6 +5,11 @@
 int num_xstreams;
 int num_threads;
 
+void argolib_core_init(int argc, char **argv)
+{
+        argolib_init(argc, argv);
+}
+
 void argolib_init(int argc, char **argv)
 {
 	int is_randws = 0;
@@ -68,6 +73,11 @@ void argolib_init(int argc, char **argv)
 	}
 }
 
+Task_handle *argolib_core_fork(fork_t fptr, void *args)
+{
+        return argolib_fork(fptr, args);
+}
+
 Task_handle *argolib_fork(fork_t fptr, void *args)
 {
 	/** Create ULTs.
@@ -85,6 +95,11 @@ Task_handle *argolib_fork(fork_t fptr, void *args)
 					  ABT_THREAD_ATTR_NULL, thread_pointer);
 
 	return thread_pointer;
+}
+
+void argolib_core_join(Task_handle **list, int size)
+{
+        argolib_join(list, size);
 }
 
 void argolib_join(Task_handle **list, int size)
@@ -109,17 +124,23 @@ void argolib_join(Task_handle **list, int size)
 	}
 }
 
+void argolib_core_kernel(fork_t fptr, void *args)
+{
+        argolib_kernel(fptr, args);
+}
+
 void argolib_kernel(fork_t fptr, void *args)
 {
-	/**TODO
-	 * Print Statistics
-	 */
 	Task_handle *kernel_task[1];
 	kernel_task[0] = argolib_fork(fptr, args);
 
 	argolib_join(kernel_task, 1);
 }
 
+void argolib_core_finalize()
+{
+        argolib_finalize();
+}
 
 void argolib_finalize()
 {
