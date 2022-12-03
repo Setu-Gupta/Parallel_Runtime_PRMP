@@ -47,7 +47,7 @@ help:
 
 .PHONY: clean
 clean:										# Specify the clean target
-	rm -rf $(TARGETS)
-	rm -rf $(OBJECTS)
-	rm -rf $(DEBUG_TARGETS)
-	rm -rf $(DEBUG_OBJECTS)
+	rm -rf build/release/*
+	rm -rf build/debug/*
+	rm -rf bin/release/*
+	rm -rf bin/debug/*
