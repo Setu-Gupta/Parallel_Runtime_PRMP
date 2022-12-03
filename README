@@ -22,7 +22,7 @@ How to use the generated libraries:
                 $ g++ -O3 -I$(ARGOLIB_INSTALL_DIR)/include -L$(ARGOLIB_INSTALL_DIR)/release/lib -I$(ARGOBOTS_INSTALL_DIR)/include -L$(ARGOBOTS_INSTALL_DIR)/lib -largolib -labt <sources> -o <binary_name>
         4. Set up LD_LIBRARY_PATH to include argolib and argobots runtime libraries:
                 $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
-                $ export LD_LIBRARY_PATH=$ARGOLIB_INSTALL_DIR/release/lib:$LD_LIBRARY_PATH
+                $ export LD_LIBRARY_PATH=$ARGOLIB_INSTALL_DIR/<debug | release>/lib:$LD_LIBRARY_PATH
         5. Launch you application after setting up the number of argolib workers:
                 $ ARGOLIB_WORKERS=<NUM_WORKERS> <binary_name>
 
@@ -105,7 +105,7 @@ How to run M3_evaluator.sh:
                 b. Matplotlib (This needs to be installed explicitly)
         2. After installing the dependencies, export the following environment variables which would be need to run the script:
                 a. ARGOBOTS_INSTALL_DIR=/absolute/path/to/the/installation/directory/of/argobots
-                b. ARGOLIB_INSTALL_DIR=/absolute/path/to/the/current/directory/
+                b. ARGOLIB_INSTALL_DIR=/absolute/path/to/the/current/directory/release/lib
                 c. PCMROOT=/absolute/path/to/the/pcm-202210/directory/
         3. After exporting the variables, simple execute the script by running the following command from the current directory:
                 $ ./M3_evaluator.sh
