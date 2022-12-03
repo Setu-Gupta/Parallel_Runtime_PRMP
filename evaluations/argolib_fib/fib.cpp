@@ -1,4 +1,4 @@
-#include "argolib.hpp"
+#include <argolib.hpp>
 
 #define FIB_N 45
 #define THRESHOLD 25

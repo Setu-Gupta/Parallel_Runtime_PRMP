@@ -1,4 +1,4 @@
-#include "argolib.hpp"
+#include <argolib.hpp>
 
 #define ELEMENT_T uint64_t
 

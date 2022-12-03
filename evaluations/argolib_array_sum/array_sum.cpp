@@ -1,4 +1,4 @@
-#include "argolib.hpp"
+#include <argolib.hpp>
 #include<iostream>
 
 #define SIZE (104857600)
