@@ -70,7 +70,7 @@ void configure_DOP(double jpi_prev, double jpi_cur)
 bool daemon_shutdown = false;
 void* daemon_profiler(void *)
 {
-        const unsigned int fixed_interval = 1;
+        const unsigned int fixed_interval = 10;
         
         std::this_thread::sleep_for(std::chrono::milliseconds(5));   // Sleep for 5 milliseconds to wait for warmup
         
@@ -81,7 +81,7 @@ void* daemon_profiler(void *)
                 std::cout << jpi_cur << std::endl;
                 configure_DOP(jpi_prev, jpi_cur);
                 jpi_prev = jpi_cur;
-                std::this_thread::sleep_for(std::chrono::microseconds(fixed_interval));
+                std::this_thread::sleep_for(std::chrono::nanoseconds(fixed_interval));
         }
         return NULL;
 }
