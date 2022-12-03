@@ -54,3 +54,13 @@ How to run tests:
                 $ export ASAN_OPTIONS=use_odr_indicator=1
         3. Execute the binary
                 $ ./<binary_name>
+
+How to run the evaluation script:
+        1. Export the following variables:
+                $ export ARGOBOTS_INSTALL_DIR=/path/to/argobots/installation
+                $ export ARGOLIB_INSTALL_DIR=/path/to/this/directory
+                $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$ARGOLIB_INSTALL_DIR/release/lib:
+        2. Go to the evaluations directory:
+                $ cd evaluations
+        3. Run the evaluation script
+                $ ./evaluator.sh

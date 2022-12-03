@@ -1,6 +1,7 @@
 src     : This directory has the source files for the library
 include : This directory has the header files which can be included by any application which wants to use argolib
 tests   : This directory contains some test files to test if the argolibs library is working or not
+evaluations     : This directory contains the benchmarks
 
 release/build   : This directory contains the compiled object files for the argolib library built in release mode
 release/lib     : This directory contains the compiled shared object file for the argolib library built in release mode
