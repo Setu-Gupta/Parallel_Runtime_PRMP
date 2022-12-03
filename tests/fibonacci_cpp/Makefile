@@ -1,9 +1,9 @@
 # Set the compiler to be used
 CXX = g++
 # Set the flags to be passed to the compiler regardless of the optimization level
-CFLAGS = -march=native -pedantic -Wall -Werror -Wextra
+CFLAGS = -march=native -pedantic -Wall -Werror -Wextra -pthread
 # Set the flags to be passed to the linker
-LDFLAGS	= -largolib -labt -lpcm -lpthread
+LDFLAGS	= -largolib -labt -lpcm -lpthread -lpthread
 # Set the optimization level for the release build
 OPTFLAGS = -Ofast
 # Set the flags for the debug build
