@@ -2,6 +2,8 @@ The names and contact details of the authors of this project can be found in AUT
 The sources from where the code was borrowed (if applicable) can be found in SOURCES.
 The description of each directory and the files in them can be found in FILE_STRUCT.
 
+NOTE: Refer to the last two points to get an idea of the evaluation strategy that we recommend.
+
 How to build:
         1. Set up the environment variable PCMROOT to point to the installation directory for pcm
                 $ export PCMROOT=/absolute/path/to/pcm/directory
@@ -63,3 +65,47 @@ How to run tests:
                 $ export ARGOLIB_RANDOMWS=<1 | 0>
         4. Execute the binary
                 $ ./<binary_name>
+
+Evaluation Guidelines:
+        1. Various tags have been added in the git history to make it easier for you to identify the code
+           which needs to be evaluated. All the tags can be printed by running the following command:
+                $ git tag -l
+        2. The expected output for the above command is:
+                Baseline_Argolib
+                M1_opt
+                M1_sub
+                M2_opt
+                M2_sub
+                M3_sub
+                PowerOpt
+                PowerUnopt
+        3. The meaning of each of these tags is as follows:
+                Baseline_Argolib: This is the baseline implementation of argolib without any optimizations which uses the
+                                  default work stealing implemented by Argobots.
+                M1_sub: This is the submission for the Milestone-1. You may verify this by matching the hash of the commit.
+                M2_sub: This is the submission for the Milestone-2. You may verify this by matching the hash of the commit.
+                M3_sub: This is the submission for the Milestone-3.
+                M1_opt: This is the submission for the optimized version of Milestone-1.
+                M2_opt: This is the submission for the optimized version of Milestone-2.
+                PowerOpt: This tag is used by the automated Milestone-3 evaluation script to run the power optimized code.
+                PowerUnopt: This tag is used by the automated Milestone-3 evaluation script to run the power unoptimized code.
+        4. To evaluate Milestone-3, simply execute the M3_evaluator.sh script. This scrip will automatically collect the power
+           statistics for both the power optimized code and the power unoptimized code. The statistics are added to two files,
+           stats_opt for the power optimized version, and stats_unopt for the power unoptimized version. These stats files are
+           then moved to the plotting_scripts directory which contains the python script which plots a graph of the power
+           utilization for both the cases. The detailed instructions to needed to execute this script are provided below.
+        5. M3_evaluator_iterative.sh is used for our own experiments on top of what is required from the milestone 3.
+
+How to run M3_evaluator.sh:
+        1. Before running this script make sure that the following python3 dependencies are installed on the test system:
+                a. sys (This is a part of the core python3 installation)
+                b. Matplotlib (This needs to be installed explicitly)
+        2. After installing the dependencies, export the following environment variables which would be need to run the script:
+                a. ARGOBOTS_INSTALL_DIR=/absolute/path/to/the/installation/directory/of/argobots
+                b. ARGOLIB_INSTALL_DIR=/absolute/path/to/the/current/directory/
+                c. PCMROOT=/absolute/path/to/the/pcm-202210/directory/
+        3. After exporting the variables, simple execute the script by running the following command from the current directory:
+                $ ./M3_evaluator.sh
+        4. The script will first collect the stats files, and then move them to the plotting_scripts directory. Then it will call
+           the python3 script to generate a plot of the power utilization. The plot will get exported to a .png file with the name
+           of power_plot.png in the plotting_scripts directory itself.
