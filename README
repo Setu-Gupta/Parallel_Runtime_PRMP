@@ -81,7 +81,7 @@ Evaluation Guidelines:
                 PowerUnopt
         3. The meaning of each of these tags is as follows:
                 Baseline_Argolib: This is the baseline implementation of argolib without any optimizations which uses the
-                                  default work stealing implemented by Argobots.
+                                  default work stealing implemented by Argobots, i.e. Milestone-1 Part-1.
                 M1_sub: This is the submission for the Milestone-1. You may verify this by matching the hash of the commit.
                 M2_sub: This is the submission for the Milestone-2. You may verify this by matching the hash of the commit.
                 M3_sub: This is the submission for the Milestone-3.
