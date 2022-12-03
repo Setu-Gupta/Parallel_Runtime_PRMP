@@ -63,7 +63,7 @@ How to run tests:
                 $ export ARGOLIB_WORKERS=<num_workers>
         4. Enable random work stealing if desired
                 $ export ARGOLIB_RANDOMWS=<1 | 0>
-        4. Execute the binary
+        5. Execute the binary
                 $ ./<binary_name>
 
 Evaluation Guidelines:
@@ -97,6 +97,7 @@ Evaluation Guidelines:
         5. M3_evaluator_iterative.sh is used for our own experiments on top of what is required from the milestone 3.
         6. Note that this repository has a lot of branches for experimentation which have been abandoned, so please
            ignore them.
+        7. The evaluation branch has all the code for evaluation of Milestone 1 and 2.
 
 How to run M3_evaluator.sh:
         1. Before running this script make sure that the following python3 dependencies are installed on the test system:
