@@ -70,8 +70,7 @@ void configure_DOP(double jpi_prev, double jpi_cur)
 bool daemon_shutdown = false;
 void* daemon_profiler(void *)
 {
-        // Update DOP every 100ms
-        const unsigned int fixed_interval = 100;
+        const unsigned int fixed_interval = 1;
         
         std::this_thread::sleep_for(std::chrono::milliseconds(5));   // Sleep for 5 milliseconds to wait for warmup
         
