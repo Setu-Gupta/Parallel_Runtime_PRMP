@@ -1,20 +1,4 @@
 #include "argolib.hpp"
-#include <iostream>
-#include <chrono>
-
-namespace timer {
-  static double lasttime=0;
-  template<typename T>
-  void kernel(const std::string& str, T &&lambda) {
-    auto start = std::chrono::system_clock::now();
-    lambda();
-    auto end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed = end - start;
-    lasttime = elapsed.count();
-    std::cout<<"Time("<<str<<") = "<<elapsed.count() * 1000 << " ms" << std::endl;
-  }
-  double duration() { return lasttime; }
-}
 
 #define ELEMENT_T uint64_t
 
@@ -77,7 +61,7 @@ int main(int argc, char **argv) {
   for(int i=0; i<N; i++) {
     data[i] = (ELEMENT_T)rand();
   }	
-  timer::kernel("QSort kernel", [=]() {
+  argolib::kernel([=]() {
     sort(data, 0, N-1, threshold);
   });
   ELEMENT_T a =0, b;
