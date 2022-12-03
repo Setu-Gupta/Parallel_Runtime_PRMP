@@ -44,7 +44,7 @@ How to build tests:
         1. Set up environment variables
                 $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PCMROOT/build/lib
                 $ export ARGOBOTS_INSTALL_DIR=/path/to/argobots/installation
-                $ export ARGOLIB_INSTALL_DIR=/path/to/this/directory
+                $ export ARGOLIB_INSTALL_DIR=/path/to/this/directory/release/lib
                 $ export LD_LIBRARY_PATH=$ARGOBOTS_INSTALL_DIR/lib:$LD_LIBRARY_PATH
                 $ export LD_LIBRARY_PATH=$ARGOLIB_INSTALL_DIR/<release | debug>/lib:$LD_LIBRARY_PATH
         2. Go to your test directory
