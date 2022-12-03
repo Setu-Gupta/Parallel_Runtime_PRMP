@@ -95,6 +95,8 @@ Evaluation Guidelines:
            then moved to the plotting_scripts directory which contains the python script which plots a graph of the power
            utilization for both the cases. The detailed instructions to needed to execute this script are provided below.
         5. M3_evaluator_iterative.sh is used for our own experiments on top of what is required from the milestone 3.
+        6. Note that this repository has a lot of branches for experimentation which have been since abandoned, so please
+           ignore them.
 
 How to run M3_evaluator.sh:
         1. Before running this script make sure that the following python3 dependencies are installed on the test system:
