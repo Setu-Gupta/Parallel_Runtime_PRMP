@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
     int result = 0;
     fibonacci_arg_t* arg;
     arg = (fibonacci_arg_t*) malloc(sizeof(fibonacci_arg_t));
-    arg->n = 10;
+    arg->n = 15;
     arg->ret = 0;
     for(int i = 0; i < 10; i++)
     {
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         compute_kernel(arg, &result);
         argolib_stop_tracing();
     }
-    printf("10 * Fib(10) = %d\n", result);
+    printf("10 * Fib(15) = %d\n", result);
     argolib_finalize();
     free(arg);
     return 0;

@@ -139,6 +139,11 @@ void print_stats()
                 total_task_created += pool_task[i];
         }
 
+        int total_steals = 0;
+        for(int i = 0; i < num_xstreams; i++){
+                total_steals += pool_stolen_from[i];
+        }
+
         for (int i = 0; i < num_xstreams; i++)
         {
                 printf("Pool %d\n", i);
@@ -149,9 +154,10 @@ void print_stats()
         }
 
         printf("\n");
+        printf("Total Task Created: %d\n", total_task_created);
+        printf("Total Steals: %d\n", total_steals);
         printf("Net pushes: %d\n", net_push);
         printf("Net pops: %d\n", net_pop);
-        printf("Total Tasks Created: %d\n", total_task_created);
 }
 
 void print_shared_counter(){
@@ -754,7 +760,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
                                         int targetRequestBox = requestBox[target];
 
-                                        if (sharedCounter[target] > 4 && targetRequestBox == -1)
+                                        if (sharedCounter[target] > 3 && targetRequestBox == -1)
                                         {
                                                 // Take lock on Request Box as it is read by the Victim as well
                                                 // Put a Steal Request in the Request Box
