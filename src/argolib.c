@@ -390,7 +390,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
                                 int targetCount = sharedCounter[target];
                                 // pthread_mutex_lock(&poolLock[target]);
-                                if (targetCount > 16 && targetRequestBox == -1)
+                                if (targetCount > 1 && targetRequestBox == -1)
                                 {
                                         // Take lock on Request Box as it is read by the Victim as well
                                         // Put a Steal Request in the Request Box
