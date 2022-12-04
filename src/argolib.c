@@ -5,6 +5,9 @@
 int num_xstreams;
 int num_threads;
 
+int *pool_task;
+int *pool_steal;
+
 void argolib_core_init(int argc, char **argv)
 {
         argolib_init(argc, argv);
@@ -26,6 +29,9 @@ void argolib_init(int argc, char **argv)
 	xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * num_xstreams);
 	pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
 	scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * num_xstreams);
+
+        pool_task = (int *) calloc(num_xstreams, sizeof(int));
+        pool_steal = (int *) calloc(num_xstreams, sizeof(int));
 
 	threads = (ABT_thread *)malloc(sizeof(ABT_thread) * num_threads);
 
@@ -89,6 +95,7 @@ Task_handle *argolib_fork(fork_t fptr, void *args)
 
 	int rank;
 	ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
+        pool_task[rank]++;
 	ABT_pool target_pool = pools[rank];
 	// When should we use ABT_thread_create_to ?
 	ABT_thread_create(target_pool, fptr, args,
@@ -146,6 +153,11 @@ void argolib_finalize()
 {
 	// Finalize argobots
 	ABT_finalize();
+
+        int totalTask= 0;
+        for(int i = 0; i < num_xstreams; i++)
+                totalTask += pool_task[i];
+        printf("Total Task: %d", totalTask);
 
 	// Free allocated memory
 	free(xstreams);
