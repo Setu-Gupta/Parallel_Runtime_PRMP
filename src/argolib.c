@@ -138,10 +138,14 @@ void argolib_core_kernel(fork_t fptr, void *args)
 
 void argolib_kernel(fork_t fptr, void *args)
 {
+        double timeStart = ABT_get_wtime(); // Gives current time in S
 	Task_handle *kernel_task[1];
 	kernel_task[0] = argolib_fork(fptr, args);
 
 	argolib_join(kernel_task, 1);
+        double timeEnd = ABT_get_wtime();
+
+        printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0)
 }
 
 void argolib_core_finalize()
