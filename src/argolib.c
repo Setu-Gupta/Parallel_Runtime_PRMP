@@ -157,7 +157,7 @@ void argolib_finalize()
         int totalTask= 0;
         for(int i = 0; i < num_xstreams; i++)
                 totalTask += pool_task[i];
-        printf("Total Task: %d", totalTask);
+        printf("Total Task: %d\n", totalTask);
 
 	// Free allocated memory
 	free(xstreams);
