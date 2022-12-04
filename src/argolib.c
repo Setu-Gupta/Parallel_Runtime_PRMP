@@ -48,6 +48,7 @@ pthread_mutex_t pplock;
 int net_push = 0;
 int net_pop = 0;
 
+int *pool_task;
 int *pool_net_push;
 int *pool_net_pop;
 int *pool_head_push;
@@ -61,6 +62,15 @@ int *mailBox_task;
 
 void print_stats()
 {
+        int total_task_created = 0;
+        for(int i = 0; i < num_xstreams; i++){
+                total_task_created += pool_task[i];
+        }
+
+        int total_steals = 0;
+        for(int i = 0; i < num_xstreams; i++){
+                total_steals += pool_stolen_from[i];
+        }
 
         for (int i = 0; i < num_xstreams; i++)
         {
@@ -72,6 +82,8 @@ void print_stats()
         }
 
         printf("\n");
+        printf("Total Task Created: %d\n", total_task_created);
+        printf("Total Steals: %d\n", total_steals);
         printf("Net pushes: %d\n", net_push);
         printf("Net pops: %d\n", net_pop);
 }
@@ -107,6 +119,7 @@ void argolib_core_init(int argc, char **argv)
         pool_tail_pop = (int *)calloc(num_xstreams, sizeof(int));
         pool_stolen_from = (int *)calloc(num_xstreams, sizeof(int));
         pool_stole_from = (int *)calloc(num_xstreams, sizeof(int));
+        pool_task = (int *)calloc(num_xstreams, sizeof(int));
 
         mailBox_task = (int *)calloc(num_xstreams, sizeof(int));
 
@@ -206,6 +219,7 @@ Task_handle *argolib_core_fork(fork_t fptr, void *args)
         int rank;
         ABT_xstream_self_rank(&rank); // Gets the pool index of the calling pool
         ABT_pool target_pool = pools[rank];
+        pool_task[rank]++;
         // printf("Forked from ES %d\n", rank);
         //  When should we use ABT_thread_create_to ?
         //  This internally pushes the thread into the pool
