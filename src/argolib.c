@@ -121,6 +121,12 @@ void print_stats()
                 total_task_created += pool_task[i];
         }
 
+        int total_steals = 0;
+        for(int i = 0; i < num_xstreams; i++){
+                total_steals += pool_stolen_from[i];
+        }
+
+
         for (int i = 0; i < num_xstreams; i++)
         {
                 printf("Pool %d\n", i);
@@ -134,6 +140,7 @@ void print_stats()
         printf("Net pushes: %d\n", net_push);
         printf("Net pops: %d\n", net_pop);
         printf("Total Tasks Created: %d\n", total_task_created);
+        printf("Total Tasks Stolen: %d\n", total_steals);
 }
 
 void print_shared_counter(){
