@@ -390,7 +390,7 @@ static ABT_thread pool_pop(ABT_pool pool, ABT_pool_context context)
 
                                 int targetCount = sharedCounter[target];
                                 // pthread_mutex_lock(&poolLock[target]);
-                                if (targetCount > 4 && targetRequestBox == -1)
+                                if (targetCount > 8 && targetRequestBox == -1 && false)
                                 {
                                         // Take lock on Request Box as it is read by the Victim as well
                                         // Put a Steal Request in the Request Box
@@ -603,7 +603,7 @@ static void sched_run(ABT_sched sched)
                 // another pool for a steal. Now we need to wait for the other pool to serve
                 // the request and eventually, we would have a task after it has served our request.
 
-                // else if (num_pools > 1)
+                        // else if (num_pools > 1)
                 // {
                 //         /* Steal a work unit from other pools */
                 //         // target =
