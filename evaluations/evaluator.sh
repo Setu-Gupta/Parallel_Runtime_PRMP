@@ -34,7 +34,7 @@ do
                 make > /dev/null
                 cd bin/release
                 bin=$(ls)
-                ARGOLIB_WORKERS=20 ./$bin
+                ARGOLIB_WORKERS=20 ARGOLIB_RANDOMWS=1 ./$bin
                 cd ../..
                 make clean > /dev/null
                 echo ++++++++++++++++++++++++++++++++$i+++++++++++++++++++++++++++++++++++++++++
