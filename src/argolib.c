@@ -145,7 +145,7 @@ void argolib_kernel(fork_t fptr, void *args)
 	argolib_join(kernel_task, 1);
         double timeEnd = ABT_get_wtime();
 
-        printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0)
+        printf("Execution Time[ms]: %f\n", (timeEnd - timeStart) * 1000.0);
 }
 
 void argolib_core_finalize()
